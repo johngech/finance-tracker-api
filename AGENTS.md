@@ -22,7 +22,16 @@ Spring Boot 3.5.0 / Java 17 / Maven monolith. PostgreSQL + Flyway + JPA + Lombok
 ## Conventions
 
 - Use `./mvnw` (wrapper), not system `mvn`
-- JPA entities in `entity/`, repos in `repository/`, controllers in `controller/`, DTOs in `model/` or `dto/`
+- **DDD-style package layout** — code organized by bounded context, NOT by technical layer:
+  ```
+  com.marakicode.financetracker/
+    common/              # Shared: ApiResponse, BaseEntity, GlobalExceptionHandler
+    auth/                # Authentication & authorization
+    users/               # User management
+    accounts/            # Account management
+    transactions/        # Transaction management
+  ```
+  Each domain package is self-contained with a controller at the domain root. Only create `entity/`, `repository/`, `dto/`, `service/` sub-packages when a domain has **more than 2 files** of that type — otherwise, files sit flat at the domain root.
 - Tests: `@SpringBootTest` for integration, `@DataJpaTest` for repos, `@WebMvcTest` for controllers
 - Flyway: one migration per change, never edit an applied migration
 - REST Docs: generate snippets in tests, reference from AsciiDoc `.adoc` files

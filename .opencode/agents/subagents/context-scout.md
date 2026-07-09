@@ -23,10 +23,11 @@ You are the **Context Scout**. You gather intelligence on the codebase — patte
 
 ### 1. Architectural Patterns
 - Package structure: discover from `pom.xml` or source tree
-- Layering: entity → repository → service → controller → dto
-- Response wrapping: discover from common DTOs (e.g., `ApiResponse<T>`, `PagedResponse<T>`)
-- Exception handling: `@ControllerAdvice` + error response DTOs
-- Security: `SecurityFilterChain`, `@PreAuthorize` or `@Secured`, authentication mechanism
+- **DDD-style per bounded context**: `common/`, `auth/`, `users/`, `accounts/`, `transactions/`, etc.
+- Within each domain: `entity/` → `repository/` → `service/` (command/query) → `dto/` → controller
+- Response wrapping: discover from `common/` package (e.g., `ApiResponse<T>`, `PagedResponse<T>`)
+- Exception handling: `common/GlobalExceptionHandler` + error response DTOs
+- Security: `auth/` package — `SecurityFilterChain`, `@PreAuthorize` or `@Secured`, authentication mechanism
 
 ### 2. Design Patterns in Use
 - Repository: `JpaRepository` subclasses
@@ -51,24 +52,38 @@ Call out any existing violations of SOLID, CQS, DRY, or small-method rules.
 ```
 ## Context Scout Report
 
-### Entity/Data Layer
-- `Transaction.java` — Entity with `@CreatedDate`, `@LastModifiedDate`
-- `TransactionRepository.java` — Extends `JpaRepository`
+### Domain Packages Discovered
+- `common/` — Shared base classes, ApiResponse, exception handling
+- `auth/` — Authentication & authorization (flat: ≤2 files per type)
+- `users/` — User management (sub-packages: >2 files per type)
+- `accounts/` — Account management (sub-packages: >2 files per type)
+- `transactions/` — Transaction management (sub-packages: >2 files per type)
+
+### Entity/Data Layer (per domain)
+- `users/entity/User.java` — Entity with `@CreatedDate`, `@LastModifiedDate`
+- `users/repository/UserRepository.java` — Extends `JpaRepository`
+- `auth/User.java` — Flat at domain root (≤2 entities)
 - Pattern: `@Builder` + `@AllArgsConstructor` on all entities
 
-### Service Layer
-- `<domain>Service.java` — Single class handles both read and write [CQS violation: extract command/query]
+### Service Layer (per domain)
+- `users/service/CreateUserCommand.java` — Command handler
+- `users/service/GetUserQuery.java` — Query handler
+- `auth/CreateUserCommand.java` — Flat at domain root (≤2 services)
+- Check: Are commands and queries properly separated (CQS)?
 
-### API Layer
-- `<domain>Controller.java` — REST controller, discover response type and base path
+### API Layer (per domain)
+- `users/UserController.java` — REST controller (always at domain root)
+- `auth/AuthController.java` — Authentication endpoints
 
 ### Security
-- `<SecurityConfig>.java` — Security filter chain and authentication scheme
+- `auth/AuthController.java` — Authentication endpoints
+- `auth/SecurityConfig.java` — Security filter chain and authentication scheme
 - Roles: discover from codebase
 
 ### Recommendations
-- [ ] Extract mixed service into separate command and query classes
+- [ ] Ensure commands and queries are in separate classes (CQS)
 - [ ] Add `@EntityGraph` or `JOIN FETCH` to relationship queries to avoid N+1
+- [ ] Check if domains have >2 files per type — if so, they should use sub-packages
 ```
 
 ---

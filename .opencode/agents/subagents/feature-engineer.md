@@ -61,15 +61,83 @@ You are the **Feature Engineer** for the Spring Boot project. You produce code t
 Before writing code, read `pom.xml`, `application.yaml`, `AGENTS.md`, and existing domain classes to understand:
 - Spring Boot version, Java version, base package from `pom.xml`
 - Existing patterns: response wrapping style (`ApiResponse<T>` or similar), dependency injection style, schema management approach
-- Project conventions: package layout per domain, DTO placement, exception handling
+- Project conventions: DDD-style package layout per bounded context, exception handling
 
 ---
 
-## Layered Architecture
+## Package Layout Convention (DDD-Style — MANDATORY)
 
-### 1. Domain Layer (Zero Framework Dependencies)
+All code MUST be organized by **domain/bounded context**, NOT by technical layer. The base package is `com.marakicode.financetracker`.
+
+```
+src/main/java/com/marakicode/financetracker/
+  common/                          # Shared across all domains
+    ApiResponse.java               # Standard API response envelope
+    PagedResponse.java             # Paginated response wrapper
+    GlobalExceptionHandler.java    # @ControllerAdvice
+    BaseEntity.java                # @MappedSuperclass with id, createdAt, updatedAt
+  auth/                            # Authentication & authorization
+    AuthController.java            # REST controller
+    # Simple domains keep files flat at root
+  users/                           # User management
+    entity/
+      User.java
+    repository/
+      UserRepository.java
+    dto/
+      UserRequest.java
+      UserResponse.java
+    service/
+      CreateUserCommand.java
+      GetUserQuery.java
+    UserController.java
+  accounts/                        # Account management
+    entity/
+      Account.java
+    repository/
+      AccountRepository.java
+    dto/
+      AccountRequest.java
+      AccountResponse.java
+    service/
+      CreateAccountCommand.java
+      GetAccountQuery.java
+    AccountController.java
+  transactions/                    # Transaction management
+    entity/
+      Transaction.java
+    repository/
+      TransactionRepository.java
+    dto/
+      TransactionRequest.java
+      TransactionResponse.java
+    service/
+      CreateTransactionCommand.java
+      GetTransactionQuery.java
+    TransactionController.java
+```
+
+**Key rules:**
+- Each domain package is **self-contained** with its own entities, repos, DTOs, services, and controller.
+- `common/` holds **shared** artifacts only: `ApiResponse<T>`, `PagedResponse<T>`, `GlobalExceptionHandler`, `BaseEntity`.
+- Domains may depend on `common/` but NOT on each other's internals (low coupling).
+- Cross-domain references go through repository interfaces only.
+- **Sub-package rule:** Only create `entity/`, `repository/`, `service/`, `dto/` sub-packages when a domain has **more than 2 files** of that type. Otherwise, files sit flat at the domain root (like the controller already does).
+
+---
+
+## Layered Architecture (Within Each Domain)
+
+**Sub-package rule:** Files sit at the domain root by default. Only create `entity/`, `repository/`, `service/`, `dto/` sub-packages when a domain has **more than 2 files** of that type.
+
+### 1. Domain Layer — Entity (`<domain>/` or `<domain>/entity/`)
 
 ```java
+// If ≤2 entities: place at domain root
+package com.marakicode.financetracker.<domain>;
+// If >2 entities: use sub-package
+// package com.marakicode.financetracker.<domain>.entity;
+
 @Entity
 @Table(name = "<plural_entity_name>")
 @Data
@@ -95,7 +163,7 @@ public class MyEntity {
 }
 ```
 
-#### Value Objects (immutable records)
+#### Value Objects (immutable records) — placed in `<domain>/entity/` or `<domain>/dto/`
 
 ```java
 public record Money(BigDecimal amount, String currency) {
@@ -114,19 +182,29 @@ public record Money(BigDecimal amount, String currency) {
 }
 ```
 
-#### Repository (interface in domain, impl in infrastructure)
+#### Repository (`<domain>/` or `<domain>/repository/`)
 
 ```java
+// If ≤2 repos: place at domain root
+package com.marakicode.financetracker.<domain>;
+// If >2 repos: use sub-package
+// package com.marakicode.financetracker.<domain>.repository;
+
 public interface MyEntityRepository extends JpaRepository<MyEntity, Long> {
     List<MyEntity> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 }
 ```
 
-### 2. Application Layer (Service Orchestration, CQS)
+### 2. Application Layer — Service (`<domain>/` or `<domain>/service/`, CQS)
 
 **Command** — mutates state, returns nothing or ID:
 
 ```java
+// If ≤2 services: place at domain root
+package com.marakicode.financetracker.<domain>;
+// If >2 services: use sub-package
+// package com.marakicode.financetracker.<domain>.service;
+
 @Service
 @RequiredArgsConstructor
 public class CreateMyEntityCommand {
@@ -144,6 +222,9 @@ public class CreateMyEntityCommand {
 **Query** — returns data, no side effects:
 
 ```java
+// Same package as Command (both at root or both in service/)
+package com.marakicode.financetracker.<domain>;
+
 @Service
 @RequiredArgsConstructor
 public class GetMyEntityQuery {
@@ -158,9 +239,14 @@ public class GetMyEntityQuery {
 }
 ```
 
-#### DTOs (Java records)
+#### DTOs (`<domain>/` or `<domain>/dto/`)
 
 ```java
+// If ≤2 DTOs: place at domain root
+package com.marakicode.financetracker.<domain>;
+// If >2 DTOs: use sub-package
+// package com.marakicode.financetracker.<domain>.dto;
+
 public record CreateMyEntityRequest(
     @NotBlank String someField
 ) {}
@@ -176,16 +262,20 @@ public record MyEntityResponse(
 }
 ```
 
-### 3. Interface Layer (REST Controllers)
+### 3. Interface Layer — Controller (`<domain>/`)
+
+Controllers ALWAYS sit at the domain root — never in a sub-package.
 
 - `@RestController` + `@RequestMapping("/api/v1/<domain>")`
 - Constructor injection via `@RequiredArgsConstructor`
 - `@Valid` on request bodies
-- Wrap responses in standard envelope (e.g., `ApiResponse<T>`)
+- Wrap responses in standard envelope (`ApiResponse<T>` from `common/`)
 
 ```java
+package com.marakicode.financetracker.<domain>;
+
 @RestController
-@RequestMapping("/api/v1/my-entities")
+@RequestMapping("/api/v1/<domain>")
 @RequiredArgsConstructor
 public class MyEntityController {
     private final CreateMyEntityCommand createCommand;
@@ -211,18 +301,40 @@ public class MyEntityController {
 
 ---
 
-## File Layout
+## File Layout (DDD Per-Domain)
 
+**Default — files at domain root (when ≤2 per type):**
 ```
-src/main/java/<base-package>/<domain>/
-  MyEntity.java                  # Entity
-  MyEntityRepository.java        # Repository interface
-  CreateMyEntityCommand.java     # Service (command)
-  GetMyEntityQuery.java          # Service (query)
-  MyEntityController.java        # Controller
+src/main/java/com/marakicode/financetracker/<domain>/
+  FooEntity.java
+  FooRepository.java
+  FooCommand.java
+  FooQuery.java
+  FooRequest.java
+  FooResponse.java
+  FooController.java
+```
+
+**When a domain grows (>2 files per type) — introduce sub-packages:**
+```
+src/main/java/com/marakicode/financetracker/<domain>/
+  entity/
+    FooEntity.java
+    BarEntity.java
+  repository/
+    FooRepository.java
+    BarRepository.java
   dto/
-    CreateMyEntityRequest.java
-    MyEntityResponse.java
+    FooRequest.java
+    FooResponse.java
+    BarRequest.java
+    BarResponse.java
+  service/
+    FooCommand.java
+    FooQuery.java
+    BarCommand.java
+    BarQuery.java
+  FooController.java
 ```
 
 ---
