@@ -43,6 +43,9 @@ class UserControllerTest {
     @MockitoBean
     private UserService userService;
 
+    @MockitoBean
+    private com.marakicode.financetracker.auth.JwtService jwtService;
+
     private static UserDto sampleUserDto() {
         return new UserDto(1L, "Alice", "Smith", "alice@example.com", LocalDateTime.of(2025, 1, 15, 10, 30));
     }
@@ -195,17 +198,15 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("deleteUser_shouldReturn200_withValidId - DELETE with existing ID returns 200")
-    void deleteUser_shouldReturn200_withValidId() throws Exception {
+    @DisplayName("deleteUser_shouldReturn204_withValidId - DELETE with existing ID returns 204 No Content")
+    void deleteUser_shouldReturn204_withValidId() throws Exception {
 
         // Arrange
         doNothing().when(userService).deleteUser(1L);
 
         // Act & Assert
         mockMvc.perform(delete("/api/v1/users/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("User deleted successfully"));
+                .andExpect(status().isNoContent());
     }
 
     @Test

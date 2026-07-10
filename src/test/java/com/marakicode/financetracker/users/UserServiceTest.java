@@ -130,6 +130,75 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("findByEmail_shouldReturnUser_whenExists")
+    void findByEmail_shouldReturnUser_whenExists() {
+        // Arrange
+        var user = sampleUser();
+        when(userRepository.findByEmailIgnoreCase("alice@example.com")).thenReturn(Optional.of(user));
+
+        // Act
+        var result = userService.findByEmail("alice@example.com");
+
+        // Assert
+        assertThat(result).isEqualTo(user);
+        assertThat(result.getEmail()).isEqualTo("alice@example.com");
+    }
+
+    @Test
+    @DisplayName("findByEmail_shouldThrow_whenNotFound")
+    void findByEmail_shouldThrow_whenNotFound() {
+        // Arrange
+        when(userRepository.findByEmailIgnoreCase("nonexistent@example.com")).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() -> userService.findByEmail("nonexistent@example.com"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("User not found with email");
+    }
+
+    @Test
+    @DisplayName("findById_shouldReturnUser_whenExists")
+    void findById_shouldReturnUser_whenExists() {
+        // Arrange
+        var user = sampleUser();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        // Act
+        var result = userService.findById(1L);
+
+        // Assert
+        assertThat(result).isEqualTo(user);
+    }
+
+    @Test
+    @DisplayName("findById_shouldThrow_whenNotFound")
+    void findById_shouldThrow_whenNotFound() {
+        // Arrange
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() -> userService.findById(999L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("User not found with id");
+    }
+
+    @Test
+    @DisplayName("getUserByEmail_shouldReturnDto_whenExists")
+    void getUserByEmail_shouldReturnDto_whenExists() {
+        // Arrange
+        var user = sampleUser();
+        var dto = sampleUserDto();
+        when(userRepository.findByEmailIgnoreCase("alice@example.com")).thenReturn(Optional.of(user));
+        when(userMapper.toDto(user)).thenReturn(dto);
+
+        // Act
+        var result = userService.getUserByEmail("alice@example.com");
+
+        // Assert
+        assertThat(result).isEqualTo(dto);
+    }
+
+    @Test
     @DisplayName("getUserById_shouldReturnDto_whenUserExists - fetches user by id")
     void getUserById_shouldReturnDto_whenUserExists() {
         // Arrange

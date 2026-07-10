@@ -1,6 +1,7 @@
 package com.marakicode.financetracker.users;
 
 import com.marakicode.financetracker.common.DuplicateResourceException;
+import com.marakicode.financetracker.common.EmailNormalizer;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
@@ -20,7 +21,7 @@ public class UserService {
 
     @Transactional
     public UserDto createUser(UserCreateRequest request) {
-        String normalizedEmail = request.email().toLowerCase();
+        String normalizedEmail = EmailNormalizer.normalize(request.email());
         validateUniqueEmail(normalizedEmail);
         User user = userMapper.toEntity(request);
         user.setEmail(normalizedEmail);
@@ -30,8 +31,26 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public User findByEmail(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+    }
+
+    @Transactional(readOnly = true)
+    public User findById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+    }
+
+    @Transactional(readOnly = true)
+    public UserDto getUserByEmail(String email) {
+        User user = findByEmail(email);
+        return userMapper.toDto(user);
+    }
+
+    @Transactional(readOnly = true)
     public UserDto getUserById(Long id) {
-        User user = findUserOrThrow(id);
+        User user = findById(id);
         return userMapper.toDto(user);
     }
 
@@ -52,7 +71,7 @@ public class UserService {
 
     @Transactional
     public UserDto updateUser(Long id, UserUpdateRequest request) {
-        User user = findUserOrThrow(id);
+        User user = findById(id);
         userMapper.updateEntity(request, user);
         User saved = userRepository.save(user);
         return userMapper.toDto(saved);
@@ -60,7 +79,7 @@ public class UserService {
 
     @Transactional
     public void updatePassword(Long id, PasswordUpdateRequest request) {
-        User user = findUserOrThrow(id);
+        User user = findById(id);
         if (!passwordEncoder.matches(request.oldPassword(), user.getPasswordHash())) {
             throw new PasswordMismatchException("Current password is incorrect");
         }
@@ -70,7 +89,7 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Long id) {
-        User user = findUserOrThrow(id);
+        User user = findById(id);
         userRepository.delete(user);
     }
 
@@ -78,10 +97,5 @@ public class UserService {
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new DuplicateResourceException("Email already registered");
         }
-    }
-
-    private User findUserOrThrow(Long id) {
-        return userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 }

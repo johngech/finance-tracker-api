@@ -4,7 +4,7 @@
 
 - **Project:** `com.marakicode.financetracker` — Spring Boot 3.5.0 / Java 17 / Maven monolith
 - **Architecture:** PostgreSQL + Flyway + JPA + Lombok + MapStruct + Spring Security 6.5.0 + REST Docs, DDD-style package layout
-- **Current State:** Foundation and User Management are complete. Security skeleton with modular rules is in place. JWT authentication is pending.
+- **Current State:** Foundation, User Management, and Auth/JWT are complete. JWT-based stateless authentication with login, register, refresh, and profile endpoints is fully implemented and tested. `Jwt` is an immutable value object wrapping `Claims` + `SecretKey` with `isExpired()`, `getUserId()`, `getRole()` methods.
 - **Target State:** Fully functional finance tracker with JWT auth, CRUD for users/accounts/transactions, financial reporting, pagination, validation, and REST documentation.
 
 ---
@@ -37,7 +37,8 @@ Each domain is a self-contained bounded context with its own controller, service
 ```
 com.marakicode.financetracker/
   common/              # Shared foundation: base entities, API wrappers, exception handling, constants
-  auth/                # Security configuration, CORS, password encoding, (JWT pending)
+  auth/                # Security config, JWT auth (JwtConfig, JwtService, JwtAuthenticationFilter,
+                       # AuthController, AuthService, AuthSecurityRules, UserDetailsService)
   users/               # User domain: entity, CRUD, validation, email normalization
   accounts/            # (planned) Account domain
   transactions/        # (planned) Transaction domain
@@ -48,6 +49,7 @@ com.marakicode.financetracker/
 | Pattern | Description |
 |---------|-------------|
 | **Modular SecurityRules** | Each domain provides a `SecurityRules` bean. `SecurityConfig` aggregates all beans and applies them, then adds `anyRequest().authenticated()` as a catch-all. |
+| **JWT Authentication** | Stateless auth via `JwtService` (jjwt). `Jwt` is an immutable value object wrapping `Claims` + `SecretKey`. `JwtAuthenticationFilter` extracts Bearer tokens, validates, loads `User` by ID from JWT claims, sets `SecurityContextHolder`. `JwtConfig` is a `@Configuration @Data` class that externalizes secret and expiration via `spring.jwt.*` properties and caches a `SecretKey`. |
 | **ApiResponse / PagedResponse** | All endpoints return `ApiResponse<T>` for success and `ErrorDto` for errors. List endpoints use `PagedResponse<T>` for pagination. |
 | **GlobalExceptionHandler** | Centralized `@RestControllerAdvice` handles validation errors, resource not found, duplicates, method not allowed, malformed requests, type mismatches, and unexpected exceptions. Domain-specific handlers live in their respective controllers. |
 | **MapStruct + Lombok** | Entities use `@Getter/@Setter` (never `@Data`). DTOs are records. MapStruct mappers use `componentModel = "spring"` for injection. Services and controllers use `@RequiredArgsConstructor` for constructor injection. |
@@ -71,6 +73,8 @@ com.marakicode.financetracker/
 | `ResourceNotFoundException` | 404 | `GlobalExceptionHandler` |
 | `DuplicateResourceException` | 409 | `GlobalExceptionHandler` |
 | `HttpRequestMethodNotSupportedException` | 405 | `GlobalExceptionHandler` |
+| `InvalidJwtAuthenticationException` | 401 | `AuthController` |
+| `BadCredentialsException` | 401 | `AuthController` |
 | Domain-specific exceptions (e.g., password mismatch) | varies | Respective domain controller |
 
 ---
@@ -139,31 +143,37 @@ com.marakicode.financetracker/
 
 ---
 
-### Phase 3: Auth/JWT — 🔄 IN PROGRESS
+### Phase 3: Auth/JWT — ✅ DONE
 
 **Goal:** Implement JWT-based stateless authentication.
 
-**What's done:**
-- `SecurityConfig` with modular `SecurityRules` aggregation, CORS externalized via configuration properties, BCrypt `PasswordEncoder` bean
-- Security rules: user registration is public, all other endpoints require authentication
-- Security integration tests verifying access control
-
-**What's pending:**
+**What was delivered:**
 
 | Functionality | Description |
 |---------------|-------------|
-| **JWT Token Provider** | Generates access tokens (short-lived) and refresh tokens (long-lived). Validates tokens, extracts claims. |
-| **UserDetailsService** | Loads user by email for Spring Security authentication. |
-| **JWT Authentication Filter** | Intercepts requests, extracts JWT from `Authorization: Bearer` header, validates, sets security context. |
-| **Login Endpoint** | Accepts email + password, returns JWT access and refresh tokens. |
-| **Register Endpoint** | Delegates to user creation, returns JWT tokens. |
-| **Token Refresh** | Validates refresh token, returns new access token. |
+| **JWT Token Provider** | `JwtConfig` is a `@Configuration @Data` class with prefix `spring.jwt`, externalizing secret and expiration via properties and caching a `SecretKey`. `JwtService` accepts a `User` entity and returns `Jwt` value objects wrapping jjwt `Claims` + `SecretKey`. `Jwt` provides `isExpired()`, `getUserId()`, `getRole()`. Uses jjwt with HMAC-SHA signing. |
+| **UserDetailsService** | `UserDetailsServiceImpl` loads user by email via `UserRepository.findByEmailIgnoreCase` for Spring Security authentication. |
+| **JWT Authentication Filter** | `JwtAuthenticationFilter` (extends `OncePerRequestFilter`) intercepts requests, extracts JWT from `Authorization: Bearer` header, validates via `JwtService`, loads `User` by ID from JWT claims, sets `SecurityContextHolder`. Inserted before `UsernamePasswordAuthenticationFilter`. |
+| **Login Endpoint** | `POST /api/v1/auth/login` (public). Accepts email + password, delegates to `AuthenticationManager`, returns JWT access and refresh tokens wrapped in `ApiResponse`. |
+| **Register Endpoint** | `POST /api/v1/auth/register` (public). Delegates to `UserService.createUser`, returns JWT tokens. Returns 201 on success, 409 on duplicate email. |
+| **Token Refresh** | `POST /api/v1/auth/refresh` (public). Validates refresh token cryptographically, returns new access token while reusing the same refresh token. |
+| **Profile Endpoint** | `GET /api/v1/auth/me` (authenticated). Returns current user profile from security context. |
 
 **Architecture:**
 - Auth domain sits in `auth/` alongside existing security configuration
 - JWT filter inserts before Spring's default filter chain
-- Auth endpoints are public; all other endpoints remain protected
+- Auth endpoints (`login`, `register`, `refresh`) are public via `AuthSecurityRules`; all other endpoints remain protected
 - No refresh token table — tokens are validated cryptographically (stateless)
+- `AuthController` handles `InvalidJwtAuthenticationException` and `BadCredentialsException` with 401 responses
+- `CorsProperties` externalizes CORS config (`app.cors.*` in `application.yaml`)
+
+**Test coverage (36 new tests, 75 total):**
+- `AuthControllerTest` (8): login/register/refresh/me happy paths, validation errors (400), bad credentials (401), duplicate email (409)
+- `AuthServiceTest` (7): login/register/refresh business logic, credential validation, token generation, /me lookup
+- `JwtServiceTest` (11): token generation, parsing, validation, expiration, cross-user validation, `Jwt` value object methods
+- `JwtAuthenticationFilterTest` (5): valid JWT sets context, missing header skipped, invalid JWT skipped, filter chain always proceeds, user lookup by ID
+- `UserDetailsServiceImplTest` (2): user lookup by email, not-found exception
+- `SecurityConfigTest` (+3): JWT-authenticated access, login/register integration with real JWT flow
 
 ---
 
@@ -266,7 +276,7 @@ Phase 1 (Foundation)
 |-------|--------|-------|
 | Phase 1: Foundation | ✅ Complete | — |
 | Phase 2: User Management | ✅ Complete | 39 passing |
-| Phase 3: Auth/JWT | 🔄 In Progress | 6 security integration tests |
+| Phase 3: Auth/JWT | ✅ Complete | 75 passing |
 | Phase 4: Accounts | ⬜ Not Started | — |
 | Phase 5: Transactions | ⬜ Not Started | — |
 | Phase 6: Docs & Integration | ⬜ Not Started | — |

@@ -18,6 +18,11 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  jwt:
+    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    access-token-expiration: 900000
+    refresh-token-expiration: 604800000
+
 app:
   cors:
     allowed-origins: http://localhost:3000
@@ -25,4 +30,3 @@ app:
     allowed-headers: Content-Type,Authorization,X-Requested-With
     allow-credentials: true
     max-age: 3600
-

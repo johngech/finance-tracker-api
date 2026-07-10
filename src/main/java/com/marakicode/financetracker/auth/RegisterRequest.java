@@ -1,9 +1,9 @@
-package com.marakicode.financetracker.users;
+package com.marakicode.financetracker.auth;
 
 import com.marakicode.financetracker.common.ValidationConstants;
 import jakarta.validation.constraints.*;
 
-public record UserCreateRequest(
+public record RegisterRequest(
     @NotBlank(message = "First name is required")
     @Size(min = 2, max = 50, message = "First name must be between 2 and 50 characters")
     String firstName,
