@@ -7,7 +7,5 @@ public record PagedResponse<T>(
     int page,
     int size,
     int count,
-    int totalPages,
-    String next,
-    String previous
+    int totalPages
 ) {}

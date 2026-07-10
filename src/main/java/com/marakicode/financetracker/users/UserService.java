@@ -1,0 +1,87 @@
+package com.marakicode.financetracker.users;
+
+import com.marakicode.financetracker.common.DuplicateResourceException;
+import com.marakicode.financetracker.common.PagedResponse;
+import com.marakicode.financetracker.common.ResourceNotFoundException;
+import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final UserMapper userMapper;
+
+    @Transactional
+    public UserDto createUser(UserCreateRequest request) {
+        String normalizedEmail = request.email().toLowerCase();
+        validateUniqueEmail(normalizedEmail);
+        User user = userMapper.toEntity(request);
+        user.setEmail(normalizedEmail);
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        User saved = userRepository.save(user);
+        return userMapper.toDto(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public UserDto getUserById(Long id) {
+        User user = findUserOrThrow(id);
+        return userMapper.toDto(user);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<UserDto> getAllUsers(Pageable pageable) {
+        var page = userRepository.findAll(pageable);
+        var content = page.getContent().stream()
+                .map(userMapper::toDto)
+                .toList();
+        return new PagedResponse<>(
+                content,
+                page.getNumber(),
+                page.getSize(),
+                page.getNumberOfElements(),
+                page.getTotalPages()
+        );
+    }
+
+    @Transactional
+    public UserDto updateUser(Long id, UserUpdateRequest request) {
+        User user = findUserOrThrow(id);
+        userMapper.updateEntity(request, user);
+        User saved = userRepository.save(user);
+        return userMapper.toDto(saved);
+    }
+
+    @Transactional
+    public void updatePassword(Long id, PasswordUpdateRequest request) {
+        User user = findUserOrThrow(id);
+        if (!passwordEncoder.matches(request.oldPassword(), user.getPasswordHash())) {
+            throw new PasswordMismatchException("Current password is incorrect");
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void deleteUser(Long id) {
+        User user = findUserOrThrow(id);
+        userRepository.delete(user);
+    }
+
+    private void validateUniqueEmail(String email) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new DuplicateResourceException("Email already registered");
+        }
+    }
+
+    private User findUserOrThrow(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+    }
+}

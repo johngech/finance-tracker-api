@@ -1,21 +1,11 @@
-# Finance Tracker Microservice — Implementation Plan
+# Finance Tracker — Implementation Plan
 
 ## Context Summary
 
 - **Project:** `com.marakicode.financetracker` — Spring Boot 3.5.0 / Java 17 / Maven monolith
-- **Architecture:** PostgreSQL + Flyway + JPA + Lombok + REST Docs, DDD-style package layout
-- **Current State:** Empty skeleton — only `FinancetrackerApplication.java` and context-loads test exist. No migrations, no business logic.
+- **Architecture:** PostgreSQL + Flyway + JPA + Lombok + MapStruct + Spring Security 6.5.0 + REST Docs, DDD-style package layout
+- **Current State:** Foundation and User Management are complete. Security skeleton with modular rules is in place. JWT authentication is pending.
 - **Target State:** Fully functional finance tracker with JWT auth, CRUD for users/accounts/transactions, financial reporting, pagination, validation, and REST documentation.
-
-### Key Files Discovered
-
-| File | Status |
-|------|--------|
-| `pom.xml` | **Missing critical dependencies**: `spring-boot-starter-web`, `spring-boot-starter-security`, `jjwt-api/impl/jackson`, `spring-boot-starter-validation`, `spring-boot-starter-test` |
-| `src/main/resources/application.yaml` | PostgreSQL datasource configured (localhost:5432/financetracker) |
-| `src/main/resources/db/migration/` | Empty — no migrations yet |
-| `src/main/java/.../FinancetrackerApplication.java` | Plain `@SpringBootApplication` entrypoint |
-| `AGENTS.md` | DDD conventions, sub-package rule (only `entity/`, `repo/`, `dto/`, `service/` when >2 files of that type) |
 
 ---
 
@@ -23,9 +13,9 @@
 
 | ID | Requirement | Domain | Priority |
 |----|------------|--------|----------|
-| R1 | Update pom.xml with missing dependencies | Build | High |
-| R2 | Create shared foundation (BaseEntity, ApiResponse, PagedResponse, GlobalExceptionHandler) | `common/` | High |
-| R3 | User management CRUD (create, read user profiles) | `users/` | High |
+| R1 | Shared foundation (base entities, API wrappers, exception handling) | `common/` | High |
+| R2 | User management CRUD with validation and email normalization | `users/` | High |
+| R3 | Security skeleton with modular per-domain rules | `auth/` | High |
 | R4 | JWT authentication (login, register, refresh tokens) | `auth/` | High |
 | R5 | Account management CRUD (bank/investment accounts) | `accounts/` | High |
 | R6 | Transaction management CRUD (financial transactions linked to accounts) | `transactions/` | High |
@@ -34,193 +24,249 @@
 | R9 | Pagination for list endpoints | Controller + Service | Medium |
 | R10 | Standard error handling with HTTP status codes | `common/` | Medium |
 | R11 | Audit tracking (createdAt, updatedAt timestamps) | Entity Layer | Medium |
-| R12 | REST documentation (AsciiDoc snippets) | Tests + `src/main/asciidoc/` | Medium |
+| R12 | REST documentation (AsciiDoc snippets) | Tests + docs | Medium |
+
+---
+
+## Architecture Decisions
+
+### DDD-Style Package Layout
+
+Each domain is a self-contained bounded context with its own controller, service, repository, entity, DTOs, and exceptions. Sub-packages (`entity/`, `repository/`, `dto/`, `service/`) are only created when a domain has **more than 2 files** of that type — otherwise files sit flat at the domain root.
+
+```
+com.marakicode.financetracker/
+  common/              # Shared foundation: base entities, API wrappers, exception handling, constants
+  auth/                # Security configuration, CORS, password encoding, (JWT pending)
+  users/               # User domain: entity, CRUD, validation, email normalization
+  accounts/            # (planned) Account domain
+  transactions/        # (planned) Transaction domain
+```
+
+### Key Design Patterns
+
+| Pattern | Description |
+|---------|-------------|
+| **Modular SecurityRules** | Each domain provides a `SecurityRules` bean. `SecurityConfig` aggregates all beans and applies them, then adds `anyRequest().authenticated()` as a catch-all. |
+| **ApiResponse / PagedResponse** | All endpoints return `ApiResponse<T>` for success and `ErrorDto` for errors. List endpoints use `PagedResponse<T>` for pagination. |
+| **GlobalExceptionHandler** | Centralized `@RestControllerAdvice` handles validation errors, resource not found, duplicates, method not allowed, malformed requests, type mismatches, and unexpected exceptions. Domain-specific handlers live in their respective controllers. |
+| **MapStruct + Lombok** | Entities use `@Getter/@Setter` (never `@Data`). DTOs are records. MapStruct mappers use `componentModel = "spring"` for injection. Services and controllers use `@RequiredArgsConstructor` for constructor injection. |
+| **Method-Level @Transactional** | Write methods get `@Transactional`, read methods get `@Transactional(readOnly = true)`. No class-level annotations. |
+| **Flyway Migrations** | One migration per schema change, never edit an applied migration. Migrations are versioned sequentially (V1, V2, V3...). |
+| **Case-Insensitive Email** | Emails normalized to lowercase before persistence. Database enforces uniqueness via a `LOWER()` function index. |
+
+### API Response Convention
+
+- **Success:** `{ "success": true, "message": "...", "data": {...} }`
+- **Error:** `{ "timestamp": "...", "status": 400, "error": "...", "message": "...", "path": "...", "fieldErrors": [...] }`
+- **Pagination:** `{ "content": [...], "page": 0, "size": 10, "count": 1, "totalPages": 1 }`
+
+### Exception Handling Convention
+
+| Exception | HTTP Status | Handler Location |
+|-----------|-------------|-----------------|
+| `MethodArgumentNotValidException` | 400 | `GlobalExceptionHandler` |
+| `HttpMessageNotReadableException` | 400 | `GlobalExceptionHandler` |
+| `MethodArgumentTypeMismatchException` | 400 | `GlobalExceptionHandler` |
+| `ResourceNotFoundException` | 404 | `GlobalExceptionHandler` |
+| `DuplicateResourceException` | 409 | `GlobalExceptionHandler` |
+| `HttpRequestMethodNotSupportedException` | 405 | `GlobalExceptionHandler` |
+| Domain-specific exceptions (e.g., password mismatch) | varies | Respective domain controller |
 
 ---
 
 ## Phase Breakdown
 
-### Phase 1: Foundation (`common/` + Build Config)
+### Phase 1: Foundation — ✅ DONE
 
-| ID | Task | Files | Dependencies | Assigned To | Acceptance Criteria |
-|----|------|-------|-------------|-------------|---------------------|
-| P1.T1 | Update pom.xml with missing dependencies | `pom.xml` | — | @feature-engineer | `./mvnw compile` succeeds; `spring-boot-starter-web`, `spring-boot-starter-security`, `jjwt-api`/`jjwt-impl`/`jjwt-jackson`, `spring-boot-starter-validation`, `spring-boot-starter-test` are present |
-| P1.T2 | Create BaseEntity `@MappedSuperclass` | `src/main/java/com/marakicode/financetracker/common/BaseEntity.java` | P1.T1 | @feature-engineer | Compiles; has `id` (Long, `@Id @GeneratedValue`), `createdAt`, `updatedAt` (`@PrePersist`/`@PreUpdate`), uses `@MappedSuperclass` and Lombok `@Getter` |
-| P1.T3 | Create `ApiResponse<T>` record | `src/main/java/com/marakicode/financetracker/common/ApiResponse.java` | P1.T1 | @feature-engineer | Compiles; generic record with `success`, `message`, `data` fields |
-| P1.T4 | Create `PagedResponse<T>` record | `src/main/java/com/marakicode/financetracker/common/PagedResponse.java` | P1.T1 | @feature-engineer | Compiles; generic record wrapping `content`, `page`, `size`, `totalElements`, `totalPages` |
-| P1.T5 | Create `GlobalExceptionHandler` | `src/main/java/com/marakicode/financetracker/common/GlobalExceptionHandler.java` | P1.T3 | @feature-engineer | Compiles; `@RestControllerAdvice`; handles `MethodArgumentNotValidException`, `ResourceNotFoundException`, generic `Exception`; returns `ApiResponse<?>` with correct HTTP status codes |
+**Goal:** Build the shared infrastructure that all domains depend on.
 
-**Phase 1 Dependency Graph:** P1.T1 → [P1.T2, P1.T3, P1.T4] (parallel) → P1.T5
+**What was delivered:**
+- Build configuration with all required dependencies (Web, Security, Validation, JPA, Flyway, Lombok, MapStruct, Test)
+- Base entity superclass providing audit timestamps (`createdAt`, `updatedAt`) via `@PrePersist`/`@PreUpdate`
+- Standardized API response wrappers: single-resource and paginated
+- Centralized exception handling with `ErrorDto` for consistent error responses
+- Custom exceptions for common business rules (resource not found, duplicate resource)
+- Validation constants shared across domains
 
----
-
-### Phase 2: User Management (`users/`)
-
-| ID | Task | Files | Dependencies | Assigned To | Acceptance Criteria |
-|----|------|-------|-------------|-------------|---------------------|
-| P2.T1 | Create Flyway migration for users table | `src/main/resources/db/migration/V1__create_users_table.sql` | P1.T1 | @database-engineer | `./mvnw flyway:migrate` succeeds; table `users` has columns: `id` BIGSERIAL PK, `username` VARCHAR UNIQUE NOT NULL, `email` VARCHAR UNIQUE NOT NULL, `password_hash` VARCHAR NOT NULL, `created_at` TIMESTAMPTZ NOT NULL, `updated_at` TIMESTAMPTZ NOT NULL |
-| P2.T2 | Create User entity | `src/main/java/com/marakicode/financetracker/users/User.java` | P1.T2, P2.T1 | @feature-engineer | Compiles; `@Entity @Table(name = "users")`; extends `BaseEntity`; Lombok `@Getter @NoArgsConstructor`; fields map 1:1 to migration columns |
-| P2.T3 | Create UserRepository | `src/main/java/com/marakicode/financetracker/users/UserRepository.java` | P2.T2 | @feature-engineer | Compiles; extends `JpaRepository<User, Long>`; has `findByUsername(String)`, `findByEmail(String)`, `existsByUsername(String)`, `existsByEmail(String)` |
-| P2.T4 | Create UserRequest & UserResponse DTOs | `src/main/java/com/marakicode/financetracker/users/UserRequest.java`, `src/main/java/com/marakicode/financetracker/users/UserResponse.java` | P2.T2 | @feature-engineer | Compiles; `UserRequest` is a record with `@NotBlank`/`@Email` validation on `username`, `email`, `password`; `UserResponse` is a record with `id`, `username`, `email`, `createdAt` (no password exposed) |
-| P2.T5 | Create CreateUserCommand | `src/main/java/com/marakicode/financetracker/users/CreateUserCommand.java` | P2.T3, P2.T4 | @feature-engineer | Compiles; `@Service`; accepts `UserRequest`, checks duplicate username/email (throws exception), hashes password with `BCryptPasswordEncoder`, saves via `UserRepository`, returns `UserResponse` |
-| P2.T6 | Create GetUserQuery | `src/main/java/com/marakicode/financetracker/users/GetUserQuery.java` | P2.T3, P2.T4 | @feature-engineer | Compiles; `@Service`; `findById(Long)` returns `UserResponse`; `findAll(Pageable)` returns `PagedResponse<UserResponse>` |
-| P2.T7 | Create UserController | `src/main/java/com/marakicode/financetracker/users/UserController.java` | P2.T5, P2.T6, P2.T4 | @feature-engineer | Compiles; `@RestController @RequestMapping("/api/v1/users")`; `POST /` (create, returns 201), `GET /{id}` (returns 200), `GET /` (paginated list, returns 200); uses `ApiResponse<T>` wrapper; validates `@Valid @RequestBody` |
-| P2.T8 | Create User tests | `src/test/java/com/marakicode/financetracker/users/UserRepositoryTest.java`, `src/test/java/com/marakicode/financetracker/users/UserControllerTest.java` | P2.T7 | @test-engineer | `@DataJpaTest` repo test passes; `@WebMvcTest` controller test passes with mocked service; REST docs snippets generated |
-
-**Phase 2 Dependency Graph:** P2.T1 → P2.T2 → [P2.T3, P2.T4] (parallel) → [P2.T5, P2.T6] (parallel) → P2.T7 → P2.T8
+**Architecture:**
+- `common/` package contains all shared infrastructure
+- No domain logic lives here — only cross-cutting concerns
 
 ---
 
-### Phase 3: JWT Authentication (`auth/`)
+### Phase 2: User Management — ✅ DONE
 
-| ID | Task | Files | Dependencies | Assigned To | Acceptance Criteria |
-|----|------|-------|-------------|-------------|---------------------|
-| P3.T1 | Create JwtTokenProvider utility | `src/main/java/com/marakicode/financetracker/auth/JwtTokenProvider.java` | P1.T1 | @feature-engineer | Compiles; generates access tokens (15min) and refresh tokens (7 days); validates tokens; extracts username from token; uses `io.jsonwebtoken` library |
-| P3.T2 | Create CustomUserDetailsService | `src/main/java/com/marakicode/financetracker/auth/CustomUserDetailsService.java` | P2.T3 | @feature-engineer | Compiles; implements `UserDetailsService`; loads user by username via `UserRepository`; returns Spring Security `UserDetails` |
-| P3.T3 | Create JwtAuthenticationFilter | `src/main/java/com/marakicode/financetracker/auth/JwtAuthenticationFilter.java` | P3.T1, P3.T2 | @feature-engineer | Compiles; extends `OncePerRequestFilter`; extracts JWT from `Authorization: Bearer` header; validates token; sets `SecurityContext` authentication; skips public endpoints |
-| P3.T4 | Create AuthRequest & AuthResponse DTOs | `src/main/java/com/marakicode/financetracker/auth/AuthRequest.java`, `src/main/java/com/marakicode/financetracker/auth/AuthResponse.java` | P1.T1 | @feature-engineer | Compiles; `AuthRequest` record with `@NotBlank username`, `@NotBlank password`; `AuthResponse` record with `accessToken`, `refreshToken`, `tokenType`, `expiresIn` |
-| P3.T5 | Create AuthController | `src/main/java/com/marakicode/financetracker/auth/AuthController.java` | P2.T5, P3.T1, P3.T4 | @feature-engineer | Compiles; `@RestController @RequestMapping("/api/v1/auth")`; `POST /login` (returns `AuthResponse`), `POST /register` (delegates to `CreateUserCommand`, returns `AuthResponse`), `POST /refresh` (validates refresh token, returns new `AuthResponse`); public (no security) |
-| P3.T6 | Create SecurityConfig | `src/main/java/com/marakicode/financetracker/auth/SecurityConfig.java` | P3.T3, P3.T5 | @feature-engineer | Compiles; `@Configuration @EnableWebSecurity`; permits `/api/v1/auth/**`; protects all other `/api/v1/**`; registers `JwtAuthenticationFilter` before `UsernamePasswordAuthenticationFilter`; `BCryptPasswordEncoder` bean; `SecurityFilterChain` bean |
-| P3.T7 | Create Auth tests | `src/test/java/com/marakicode/financetracker/auth/AuthControllerTest.java` | P3.T6 | @test-engineer | `@WebMvcTest` passes; login returns JWT; register creates user and returns JWT; invalid credentials return 401; REST docs snippets generated |
+**Goal:** Complete CRUD for user profiles with validation, email normalization, and security.
 
-**Phase 3 Dependency Graph:** [P3.T1, P3.T4] (parallel) → P3.T2 (needs P2.T3) → P3.T3 → P3.T5 → P3.T6 → P3.T7
+**What was delivered:**
 
----
+| Functionality | Description |
+|---------------|-------------|
+| **Create User** | POST endpoint (public). Validates all fields, normalizes email to lowercase, hashes password with BCrypt, returns 201 with user data. |
+| **Get User by ID** | GET endpoint (authenticated). Returns 200 with user data or 404 if not found. |
+| **List Users** | GET endpoint (authenticated). Returns paginated results with configurable page size. |
+| **Update User** | PATCH endpoint (authenticated). Partial update — only first name and last name are mutable. Email and password are immutable via this endpoint. |
+| **Delete User** | DELETE endpoint (authenticated). Removes user, returns 200. |
+| **Change Password** | PATCH endpoint (authenticated). Validates old password matches, enforces password complexity rules, hashes and saves new password. |
 
-### Phase 4: Account Management (`accounts/`)
+**Validation rules:**
+- First/last name: required, 2–50 characters
+- Email: required, must include TLD (e.g., `user@domain.com`), stored lowercase
+- Password: required, 8–100 characters, must contain uppercase, lowercase, digit, and special character
+- Old password (change-password): required, must match current hash
 
-| ID | Task | Files | Dependencies | Assigned To | Acceptance Criteria |
-|----|------|-------|-------------|-------------|---------------------|
-| P4.T1 | Create Flyway migration for accounts table | `src/main/resources/db/migration/V2__create_accounts_table.sql` | P2.T1 | @database-engineer | `./mvnw flyway:migrate` succeeds; table `accounts` has: `id` BIGSERIAL PK, `name` VARCHAR NOT NULL, `type` VARCHAR NOT NULL (CHECK: CHECKING/SAVINGS/INVESTMENT), `currency` VARCHAR NOT NULL, `balance` DECIMAL(19,4) NOT NULL DEFAULT 0, `user_id` BIGINT NOT NULL FK→users(id), `created_at`/`updated_at` TIMESTAMPTZ NOT NULL |
-| P4.T2 | Create Account entity | `src/main/java/com/marakicode/financetracker/accounts/Account.java` | P1.T2, P4.T1 | @feature-engineer | Compiles; `@Entity @Table(name = "accounts")`; extends `BaseEntity`; `@ManyToOne(fetch = LAZY) @JoinColumn(name = "user_id") User user`; enum `Type {CHECKING, SAVINGS, INVESTMENT}` |
-| P4.T3 | Create AccountRepository | `src/main/java/com/marakicode/financetracker/accounts/AccountRepository.java` | P4.T2 | @feature-engineer | Compiles; extends `JpaRepository<Account, Long>`; has `findAllByUserId(Long, Pageable)` |
-| P4.T4 | Create AccountRequest & AccountResponse DTOs | `src/main/java/com/marakicode/financetracker/accounts/AccountRequest.java`, `src/main/java/com/marakicode/financetracker/accounts/AccountResponse.java` | P4.T2 | @feature-engineer | Compiles; `AccountRequest` record with `@NotBlank name`, `@NotNull type`, `@NotBlank currency`, `@PositiveOrZero initialBalance`; `AccountResponse` record with `id`, `name`, `type`, `currency`, `balance`, `userId`, `createdAt`, `updatedAt` |
-| P4.T5 | Create CreateAccountCommand | `src/main/java/com/marakicode/financetracker/accounts/CreateAccountCommand.java` | P4.T3, P4.T4 | @feature-engineer | Compiles; `@Service`; maps `AccountRequest` → `Account` entity (sets user from security context), saves, returns `AccountResponse` |
-| P4.T6 | Create GetAccountQuery | `src/main/java/com/marakicode/financetracker/accounts/GetAccountQuery.java` | P4.T3, P4.T4 | @feature-engineer | Compiles; `@Service`; `findById(Long)` returns `AccountResponse`; `findAllByUserId(Long, Pageable)` returns `PagedResponse<AccountResponse>` |
-| P4.T7 | Create AccountController | `src/main/java/com/marakicode/financetracker/accounts/AccountController.java` | P4.T5, P4.T6 | @feature-engineer | Compiles; `@RestController @RequestMapping("/api/v1/accounts")`; `POST /` (201), `GET /{id}` (200), `GET /` (paginated, 200); secured (requires authenticated user); uses `ApiResponse<T>` |
-| P4.T8 | Create Account tests | `src/test/java/com/marakicode/financetracker/accounts/AccountRepositoryTest.java`, `src/test/java/com/marakicode/financetracker/accounts/AccountControllerTest.java` | P4.T7 | @test-engineer | `@DataJpaTest` repo test passes; `@WebMvcTest` controller test passes; REST docs snippets generated |
+**Database:**
+- `users` table with case-insensitive unique email index via `LOWER()` function
+- Separate Flyway migration for the unique index (idempotent, uses `DROP INDEX IF EXISTS`)
 
-**Phase 4 Dependency Graph:** P4.T1 → P4.T2 → [P4.T3, P4.T4] (parallel) → [P4.T5, P4.T6] (parallel) → P4.T7 → P4.T8
+**Security:**
+- User registration is public (`POST /api/v1/users` → `permitAll`)
+- All other user endpoints require authentication
+- Security rules are modular — each domain contributes its own `SecurityRules` bean
 
----
+**Architecture:**
+- Single `UserService` handles all business logic (creation, lookup, update, deletion, password change)
+- `UserMapper` (MapStruct) handles entity ↔ DTO conversion; email mapping is service-owned (ignored in mapper)
+- `UserSecurityRules` defines which user endpoints are public vs. authenticated
+- Domain exception (`PasswordMismatchException`) handled in `UserController`, not in `GlobalExceptionHandler`
 
-### Phase 5: Transaction Management (`transactions/`)
-
-| ID | Task | Files | Dependencies | Assigned To | Acceptance Criteria |
-|----|------|-------|-------------|-------------|---------------------|
-| P5.T1 | Create Flyway migration for transactions table | `src/main/resources/db/migration/V3__create_transactions_table.sql` | P4.T1 | @database-engineer | `./mvnw flyway:migrate` succeeds; table `transactions` has: `id` BIGSERIAL PK, `account_id` BIGINT NOT NULL FK→accounts(id), `type` VARCHAR NOT NULL (CHECK: INCOME/EXPENSE/TRANSFER), `amount` DECIMAL(19,4) NOT NULL, `category` VARCHAR NOT NULL, `description` VARCHAR, `transaction_date` DATE NOT NULL, `created_at`/`updated_at` TIMESTAMPTZ NOT NULL |
-| P5.T2 | Create Transaction entity | `src/main/java/com/marakicode/financetracker/transactions/Transaction.java` | P1.T2, P5.T1 | @feature-engineer | Compiles; `@Entity @Table(name = "transactions")`; extends `BaseEntity`; `@ManyToOne(fetch = LAZY) @JoinColumn(name = "account_id") Account account`; enum `Type {INCOME, EXPENSE, TRANSFER}`; `LocalDate transactionDate` |
-| P5.T3 | Create TransactionRepository | `src/main/java/com/marakicode/financetracker/transactions/TransactionRepository.java` | P5.T2 | @feature-engineer | Compiles; extends `JpaRepository<Transaction, Long>`; has `findAllByAccountId(Long, Pageable)`, `findByAccountIdAndTransactionDateBetween(...)`, `findByAccountIdAndCategory(...)` |
-| P5.T4 | Create TransactionRequest & TransactionResponse DTOs | `src/main/java/com/marakicode/financetracker/transactions/TransactionRequest.java`, `src/main/java/com/marakicode/financetracker/transactions/TransactionResponse.java` | P5.T2 | @feature-engineer | Compiles; `TransactionRequest` record with `@NotNull accountId`, `@NotNull type`, `@Positive amount`, `@NotBlank category`, `description`, `@NotNull transactionDate`; `TransactionResponse` record with all fields including `id`, `createdAt`, `updatedAt` |
-| P5.T5 | Create CreateTransactionCommand | `src/main/java/com/marakicode/financetracker/transactions/CreateTransactionCommand.java` | P5.T3, P5.T4, P4.T3 | @feature-engineer | Compiles; `@Service @Transactional`; validates account exists and belongs to current user; updates account balance (add for INCOME, subtract for EXPENSE); saves transaction; returns `TransactionResponse` |
-| P5.T6 | Create GetTransactionQuery | `src/main/java/com/marakicode/financetracker/transactions/GetTransactionQuery.java` | P5.T3, P5.T4 | @feature-engineer | Compiles; `@Service`; `findById(Long)` returns `TransactionResponse`; `findAllByAccountId(Long, Pageable)` returns `PagedResponse<TransactionResponse>`; `findByDateRange(...)` for reporting |
-| P5.T7 | Create TransactionController | `src/main/java/com/marakicode/financetracker/transactions/TransactionController.java` | P5.T5, P5.T6 | @feature-engineer | Compiles; `@RestController @RequestMapping("/api/v1/transactions")`; `POST /` (201), `GET /{id}` (200), `GET /` (paginated by accountId, 200), `GET /report` (summary by category/date range); secured; uses `ApiResponse<T>` |
-| P5.T8 | Create Transaction tests | `src/test/java/com/marakicode/financetracker/transactions/TransactionRepositoryTest.java`, `src/test/java/com/marakicode/financetracker/transactions/TransactionControllerTest.java` | P5.T7 | @test-engineer | `@DataJpaTest` repo test passes; `@WebMvcTest` controller test passes; REST docs snippets generated |
-
-**Phase 5 Dependency Graph:** P5.T1 → P5.T2 → [P5.T3, P5.T4] (parallel) → [P5.T5, P5.T6] (parallel) → P5.T7 → P5.T8
+**Test coverage (39 tests):**
+- Repository tests: CRUD operations, case-insensitive email queries, unique constraint enforcement
+- Controller tests: all endpoints with happy paths, error paths (404, 400, 409, 405), validation errors
+- Service tests: business logic, email normalization, duplicate detection, password hashing
+- Security integration tests: public vs. protected endpoint access control
 
 ---
 
-### Phase 6: REST Documentation & Final Integration
+### Phase 3: Auth/JWT — 🔄 IN PROGRESS
 
-| ID | Task | Files | Dependencies | Assigned To | Acceptance Criteria |
-|----|------|-------|-------------|-------------|---------------------|
-| P6.T1 | Create AsciiDoc index file | `src/main/asciidoc/index.adoc` | P2.T8, P3.T7, P4.T8, P5.T8 | @feature-engineer | `./mvnw package` succeeds; generated HTML docs include all API endpoints with request/response examples |
-| P6.T2 | Create end-to-end integration test | `src/test/java/com/marakicode/financetracker/FinanceTrackerIntegrationTest.java` | P6.T1 | @test-engineer | `@SpringBootTest` with `@AutoConfigureMockMvc`; full flow: register → login → create account → create transaction → get report; all assertions pass |
+**Goal:** Implement JWT-based stateless authentication.
 
-**Phase 6 Dependency Graph:** P6.T1 → P6.T2
+**What's done:**
+- `SecurityConfig` with modular `SecurityRules` aggregation, CORS externalized via configuration properties, BCrypt `PasswordEncoder` bean
+- Security rules: user registration is public, all other endpoints require authentication
+- Security integration tests verifying access control
+
+**What's pending:**
+
+| Functionality | Description |
+|---------------|-------------|
+| **JWT Token Provider** | Generates access tokens (short-lived) and refresh tokens (long-lived). Validates tokens, extracts claims. |
+| **UserDetailsService** | Loads user by email for Spring Security authentication. |
+| **JWT Authentication Filter** | Intercepts requests, extracts JWT from `Authorization: Bearer` header, validates, sets security context. |
+| **Login Endpoint** | Accepts email + password, returns JWT access and refresh tokens. |
+| **Register Endpoint** | Delegates to user creation, returns JWT tokens. |
+| **Token Refresh** | Validates refresh token, returns new access token. |
+
+**Architecture:**
+- Auth domain sits in `auth/` alongside existing security configuration
+- JWT filter inserts before Spring's default filter chain
+- Auth endpoints are public; all other endpoints remain protected
+- No refresh token table — tokens are validated cryptographically (stateless)
 
 ---
 
-## Overall Dependency Graph
+### Phase 4: Account Management — ⬜ NOT STARTED
+
+**Goal:** CRUD for bank and investment accounts linked to users.
+
+**Planned functionality:**
+
+| Functionality | Description |
+|---------------|-------------|
+| **Create Account** | POST endpoint. Validates account type (checking/savings/investment), currency, and non-negative initial balance. |
+| **Get Account by ID** | Returns account details. Ownership verification required. |
+| **List User's Accounts** | Paginated list of accounts belonging to the authenticated user. |
+| **Update Account** | PATCH endpoint. Mutable fields: name, currency. |
+| **Delete Account** | Removes account. Business rules around linked transactions TBD. |
+
+**Architecture:**
+- `accounts/` package with entity, repository, service, controller, DTOs
+- `Account` entity with `@ManyToOne` relationship to `User`
+- Account type enforced via enum and database CHECK constraint
+- Security: users can only access their own accounts
+- Flyway migration with foreign key to users table
+
+---
+
+### Phase 5: Transaction Management — ⬜ NOT STARTED
+
+**Goal:** CRUD for financial transactions linked to accounts, with balance updates and reporting.
+
+**Planned functionality:**
+
+| Functionality | Description |
+|---------------|-------------|
+| **Create Transaction** | POST endpoint. Validates amount (positive), type (income/expense/transfer), category, and date. Updates account balance. |
+| **Get Transaction by ID** | Returns transaction details. Ownership verification via account. |
+| **List Account Transactions** | Paginated list for a specific account. |
+| **Transaction Reports** | Summary by category and date range. Computed from transaction data (no separate report entity). |
+
+**Architecture:**
+- `transactions/` package with entity, repository, service, controller, DTOs
+- `Transaction` entity with `@ManyToOne` to `Account`
+- Transaction type enforced via enum (INCOME, EXPENSE, TRANSFER)
+- Balance updates are transactional — atomic read-modify-write on account balance
+- Reports are computed queries, not stored data (YAGNI)
+- Flyway migration with foreign key to accounts table
+
+---
+
+### Phase 6: REST Documentation & Final Integration — ⬜ NOT STARTED
+
+**Goal:** Generate API documentation and verify end-to-end flows.
+
+**Planned functionality:**
+
+| Functionality | Description |
+|---------------|-------------|
+| **AsciiDoc Generation** | All controller tests produce REST Docs snippets via `@AutoConfigureRestDocs`. |
+| **API Documentation Index** | Centralized documentation covering all endpoints with request/response examples. |
+| **End-to-End Integration Test** | Full flow: register → login → create account → create transaction → get report. |
+
+---
+
+## Dependency Graph
 
 ```
-Phase 1: P1.T1 → [P1.T2, P1.T3, P1.T4] → P1.T5
-
-Phase 2: P2.T1 → P2.T2 → [P2.T3, P2.T4] → [P2.T5, P2.T6] → P2.T7 → P2.T8
-
-Phase 3: [P3.T1, P3.T4] → P3.T2 → P3.T3 → P3.T5 → P3.T6 → P3.T7
-
-Phase 4: P4.T1 → P4.T2 → [P4.T3, P4.T4] → [P4.T5, P4.T6] → P4.T7 → P4.T8
-
-Phase 5: P5.T1 → P5.T2 → [P5.T3, P5.T4] → [P5.T5, P5.T6] → P5.T7 → P5.T8
-
-Phase 6: P6.T1 → P6.T2
+Phase 1 (Foundation)
+  └── Phase 2 (Users)
+        ├── Phase 3 (Auth/JWT) — builds on user repository and security rules
+        └── Phase 4 (Accounts) — FK to users table
+              └── Phase 5 (Transactions) — FK to accounts table
+                    └── Phase 6 (Docs & Integration)
 ```
 
-### Cross-Phase Dependencies
+### Cross-Domain Dependencies
 
 | From | To | Reason |
 |------|-----|--------|
-| P2.T1 | P1.T1 | pom.xml must have Flyway dependency |
-| P2.T2 | P1.T2 | BaseEntity must exist |
-| P3.T2 | P2.T3 | UserRepository must exist for UserDetailsService |
-| P3.T5 | P2.T5 | CreateUserCommand needed for registration endpoint |
-| P4.T1 | P2.T1 | users table migration must be applied first (FK target) |
-| P4.T2 | P1.T2 | BaseEntity must exist |
-| P5.T1 | P4.T1 | accounts table migration must be applied first (FK target) |
-| P5.T2 | P1.T2 | BaseEntity must exist |
-| P5.T5 | P4.T3 | AccountRepository needed for balance updates |
-
-### Overall Critical Path
-
-```
-P1.T1 → P2.T1 → P2.T2 → P2.T3 → P2.T5 → P3.T5 → P3.T6
-                                                          ↓
-P4.T1 → P4.T2 → P4.T3 → P4.T5 → P4.T7               → P6.T1 → P6.T2
-                                                          ↑
-P5.T1 → P5.T2 → P5.T3 → P5.T5 → P5.T7 ──────────────→
-```
-
-**Estimated Total Tasks:** 34 atomic tasks across 6 phases
+| Auth | Users | UserDetailsService loads users for authentication |
+| Accounts | Users | Accounts belong to users (FK relationship) |
+| Transactions | Accounts | Transactions belong to accounts (FK relationship) |
+| Transactions | Accounts | Balance updates require account repository access |
 
 ---
 
-## Validation Report
+## Migration Versioning
 
-| Check | Status | Notes |
+| Version | Domain | Schema |
+|---------|--------|--------|
+| V1 | Users | Users table with base columns |
+| V2 | Users | Case-insensitive unique email index |
+| V3 | Accounts | Accounts table with FK to users |
+| V4 | Transactions | Transactions table with FK to accounts |
+
+---
+
+## Current Status
+
+| Phase | Status | Tests |
 |-------|--------|-------|
-| **Completeness** | ✅ PASS | All 12 requirements (R1–R12) mapped to specific tasks |
-| **SOLID** | ✅ PASS | SRP: one entity/repo/service per domain; DIP: services depend on repository interfaces; ISP: focused service classes |
-| **CQS** | ✅ PASS | Commands (`Create*`) and Queries (`Get*`) in separate classes per domain |
-| **DRY** | ✅ PASS | BaseEntity shared across all entities; ApiResponse/PagedResponse shared across all controllers; no duplicated migration or entity definitions |
-| **KISS** | ✅ PASS | Simple flat package structure; no over-engineering; records for DTOs |
-| **YAGNI** | ✅ PASS | No Report entity (computed from transactions); no Role entity (MVP: single role); no refresh token table (stateless JWT) |
-| **Correct Ordering** | ✅ PASS | Flyway → Entity → Repository → DTO → Service → Controller → Tests within each phase; Foundation before all domains; Users before Auth; Accounts before Transactions |
-| **Blast Radius** | ✅ PASS | Max 2 files per task (except tests which are naturally grouped); single-file migrations |
-| **Atomicity** | ✅ PASS | Each task is independently compilable and verifiable |
-| **Phase Cohesion** | ✅ PASS | Phase 1 = foundation; Phase 2 = users; Phase 3 = auth; Phase 4 = accounts; Phase 5 = transactions; Phase 6 = docs + integration |
-| **DDD Compliance** | ✅ PASS | Bounded contexts (users, auth, accounts, transactions, common) with self-contained packages; no sub-packages needed (≤2 files per type per domain) |
-| **Migration Versioning** | ✅ PASS | V1 (users) → V2 (accounts, FK→users) → V3 (transactions, FK→accounts) — correct FK ordering |
-
----
-
-## Verdict: ✅ READY FOR EXECUTION
-
-### Summary
-
-| Metric | Value |
-|--------|-------|
-| **Total Phases** | 6 |
-| **Total Atomic Tasks** | 34 |
-| **Max Files Per Task** | 2 (within 4-file blast radius limit) |
-| **Max Sequential Dependencies** | 6 phases |
-| **Risk Profile** | LOW — validation checkpoints between each phase |
-| **DDD Bounded Contexts** | 5 (common, users, auth, accounts, transactions) |
-| **Migrations** | 3 (V1 users, V2 accounts, V3 transactions) |
-| **New Java Files** | ~28 source + ~6 test files |
-
-### Key Design Decisions
-
-1. **DDD-style bounded contexts** — code organized by domain (`users/`, `auth/`, `accounts/`, `transactions/`, `common/`), NOT by technical layer
-2. **CQS pattern** — separate `Create*Command` and `Get*Query` service classes per domain
-3. **Records for DTOs** — immutable, concise, validation-annotated request/response records
-4. **Flat packages** — no sub-packages needed (each domain has ≤2 files per type)
-5. **BaseEntity inheritance** — shared audit fields (`id`, `createdAt`, `updatedAt`) via `@MappedSuperclass`
-6. **Migration FK ordering** — users → accounts → transactions (correct parent-before-child)
-7. **No Report entity** — reports are computed from transactions (YAGNI)
-8. **Stateless JWT** — no refresh token table; tokens validated cryptographically
-
-### Implementation Readiness
-
-This plan is ready for the `@lead-developer` to begin execution starting with Phase 1 (P1.T1: Update pom.xml).
+| Phase 1: Foundation | ✅ Complete | — |
+| Phase 2: User Management | ✅ Complete | 39 passing |
+| Phase 3: Auth/JWT | 🔄 In Progress | 6 security integration tests |
+| Phase 4: Accounts | ⬜ Not Started | — |
+| Phase 5: Transactions | ⬜ Not Started | — |
+| Phase 6: Docs & Integration | ⬜ Not Started | — |
