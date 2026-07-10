@@ -1,5 +1,6 @@
 package com.marakicode.financetracker.common;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +14,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -88,12 +91,36 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorDto> handleMalformedRequest(
             HttpMessageNotReadableException ex, HttpServletRequest request) {
         log.debug("Malformed request body on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        Throwable cause = ex.getMostSpecificCause();
+        if (cause instanceof InvalidFormatException ife && ife.getTargetType() != null
+                && ife.getTargetType().isEnum()) {
+            return buildInvalidEnumResponse(ife, request.getRequestURI());
+        }
+
         return ResponseEntity.badRequest()
                 .body(ErrorDto.of(
                         HttpStatus.BAD_REQUEST.value(),
                         "Malformed Request",
                         "Request body is malformed or unreadable",
                         request.getRequestURI()));
+    }
+
+    private ResponseEntity<ErrorDto> buildInvalidEnumResponse(
+            InvalidFormatException ife, String requestUri) {
+        String validValues = Arrays.stream(ife.getTargetType().getEnumConstants())
+                .map(Object::toString)
+                .collect(Collectors.joining(", "));
+        String fieldName = ife.getPath() != null && !ife.getPath().isEmpty()
+                ? ife.getPath().get(ife.getPath().size() - 1).getFieldName()
+                : "value";
+        return ResponseEntity.badRequest()
+                .body(ErrorDto.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Invalid Value",
+                        String.format("Invalid value '%s' for field '%s'. Allowed values are: %s",
+                                ife.getValue(), fieldName, validValues),
+                        requestUri));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

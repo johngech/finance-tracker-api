@@ -5,6 +5,8 @@ import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
+import com.marakicode.financetracker.users.Role;
+import com.marakicode.financetracker.auth.JwtService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,10 +46,10 @@ class UserControllerTest {
     private UserService userService;
 
     @MockitoBean
-    private com.marakicode.financetracker.auth.JwtService jwtService;
+    private JwtService jwtService;
 
     private static UserDto sampleUserDto() {
-        return new UserDto(1L, "Alice", "Smith", "alice@example.com", LocalDateTime.of(2025, 1, 15, 10, 30));
+        return new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER, LocalDateTime.of(2025, 1, 15, 10, 30));
     }
 
     @Test
@@ -167,7 +169,7 @@ class UserControllerTest {
 
         // Arrange
         var request = new UserUpdateRequest("Alice", "Johnson");
-        var updatedResponse = new UserDto(1L, "Alice", "Johnson", "alice@example.com", LocalDateTime.of(2025, 1, 15, 10, 30));
+        var updatedResponse = new UserDto(1L, "Alice", "Johnson", "alice@example.com", Role.USER, LocalDateTime.of(2025, 1, 15, 10, 30));
         when(userService.updateUser(eq(1L), any(UserUpdateRequest.class))).thenReturn(updatedResponse);
 
         // Act & Assert

@@ -1,7 +1,8 @@
 package com.marakicode.financetracker.auth;
 
+import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.User;
-import com.marakicode.financetracker.users.UserRepository;
+import com.marakicode.financetracker.users.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -9,8 +10,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,7 +19,7 @@ import static org.mockito.Mockito.when;
 class UserDetailsServiceImplTest {
 
     @Mock
-    private UserRepository userRepository;
+    private UserService userService;
 
     @InjectMocks
     private UserDetailsServiceImpl userDetailsService;
@@ -40,8 +39,7 @@ class UserDetailsServiceImplTest {
 
         // Arrange
         var user = sampleUser();
-        when(userRepository.findByEmailIgnoreCase("alice@example.com"))
-                .thenReturn(Optional.of(user));
+        when(userService.findByEmail("alice@example.com")).thenReturn(user);
 
         // Act
         var userDetails = userDetailsService.loadUserByUsername("alice@example.com");
@@ -60,8 +58,8 @@ class UserDetailsServiceImplTest {
     void loadUserByUsername_shouldThrow_whenEmailNotFound() {
 
         // Arrange
-        when(userRepository.findByEmailIgnoreCase("nonexistent@example.com"))
-                .thenReturn(Optional.empty());
+        when(userService.findByEmail("nonexistent@example.com"))
+                .thenThrow(new ResourceNotFoundException("User not found with email: nonexistent@example.com"));
 
         // Act & Assert
         assertThatThrownBy(() -> userDetailsService.loadUserByUsername("nonexistent@example.com"))

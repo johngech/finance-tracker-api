@@ -50,7 +50,7 @@ class UserServiceTest {
     }
 
     private static UserDto sampleUserDto() {
-        return new UserDto(1L, "Alice", "Smith", "alice@example.com", LocalDateTime.of(2025, 1, 15, 10, 30));
+        return new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER, LocalDateTime.of(2025, 1, 15, 10, 30));
     }
 
     @Test
@@ -252,7 +252,7 @@ class UserServiceTest {
         // Arrange
         var request = new UserUpdateRequest("Alice", "Johnson");
         var user = sampleUser();
-        var updatedDto = new UserDto(1L, "Alice", "Johnson", "alice@example.com", LocalDateTime.now());
+        var updatedDto = new UserDto(1L, "Alice", "Johnson", "alice@example.com", Role.USER, LocalDateTime.of(2025, 1, 15, 10, 30));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(userRepository.save(user)).thenReturn(user);
         when(userMapper.toDto(user)).thenReturn(updatedDto);

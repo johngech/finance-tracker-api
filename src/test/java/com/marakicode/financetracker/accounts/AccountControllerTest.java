@@ -8,6 +8,7 @@ import com.marakicode.financetracker.accounts.dto.UpdateAccountTypeRequest;
 import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
+import com.marakicode.financetracker.auth.JwtService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -49,7 +51,7 @@ class AccountControllerTest {
     private AccountService accountService;
 
     @MockitoBean
-    private com.marakicode.financetracker.auth.JwtService jwtService;
+    private JwtService jwtService;
 
     private static AccountResponse sampleAccountResponse() {
         return new AccountResponse(1L, "Checking123", AccountType.CHECKING,
@@ -177,7 +179,7 @@ class AccountControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Account updated successfully"))
+                .andExpect(jsonPath("$.message").value("Currency updated successfully"))
                 .andExpect(jsonPath("$.data.name").value("Checking123"))
                 .andExpect(jsonPath("$.data.currency").value("EUR"));
     }
@@ -283,5 +285,93 @@ class AccountControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currency\":\"USD\"}"))
                 .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    @DisplayName("createAccount_shouldReturn400_withInvalidEnumType - POST with unknown type returns 400 with valid values")
+    void createAccount_shouldReturn400_withInvalidEnumType() throws Exception {
+        String body = """
+                {
+                    "name": "Checking123",
+                    "type": "INVALID",
+                    "currency": "USD",
+                    "initialBalance": 1000.00
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid Value"))
+                .andExpect(jsonPath("$.path").value("/api/v1/accounts"))
+                .andExpect(jsonPath("$.message").value(containsString("INVALID")))
+                .andExpect(jsonPath("$.message").value(containsString("for field 'type'")))
+                .andExpect(jsonPath("$.message").value(containsString("CHECKING")))
+                .andExpect(jsonPath("$.message").value(containsString("SAVINGS")))
+                .andExpect(jsonPath("$.message").value(containsString("INVESTMENT")));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("updateAccountType_shouldReturn400_withInvalidEnumType - PATCH /{id}/type with unknown type returns 400 with valid values")
+    void updateAccountType_shouldReturn400_withInvalidEnumType() throws Exception {
+        String body = """
+                {
+                    "type": "BROKERAGE"
+                }
+                """;
+
+        mockMvc.perform(patch("/api/v1/accounts/1/type")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid Value"))
+                .andExpect(jsonPath("$.path").value("/api/v1/accounts/1/type"))
+                .andExpect(jsonPath("$.message").value(containsString("BROKERAGE")))
+                .andExpect(jsonPath("$.message").value(containsString("for field 'type'")))
+                .andExpect(jsonPath("$.message").value(containsString("CHECKING")))
+                .andExpect(jsonPath("$.message").value(containsString("SAVINGS")))
+                .andExpect(jsonPath("$.message").value(containsString("INVESTMENT")));
+    }
+
+    @Test
+    @DisplayName("createAccount_shouldReturn400_withLowercaseEnumType - POST with lowercase type returns 400 (case-sensitive)")
+    void createAccount_shouldReturn400_withLowercaseEnumType() throws Exception {
+        String body = """
+                {
+                    "name": "Checking123",
+                    "type": "checking",
+                    "currency": "USD",
+                    "initialBalance": 1000.00
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid Value"))
+                .andExpect(jsonPath("$.message").value(containsString("checking")))
+                .andExpect(jsonPath("$.message").value(containsString("for field 'type'")))
+                .andExpect(jsonPath("$.message").value(containsString("CHECKING")));
+    }
+
+    @Test
+    @DisplayName("createAccount_shouldReturn400_withEmptyStringEnumType - POST with empty string type returns 400")
+    void createAccount_shouldReturn400_withEmptyStringEnumType() throws Exception {
+        String body = """
+                {
+                    "name": "Checking123",
+                    "type": "",
+                    "currency": "USD",
+                    "initialBalance": 1000.00
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
     }
 }

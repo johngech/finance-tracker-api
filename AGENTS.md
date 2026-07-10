@@ -41,17 +41,20 @@ com.marakicode.financetracker/
   common/              # ApiResponse, PagedResponse, BaseEntity, GlobalExceptionHandler,
                        # ErrorDto, ResourceNotFoundException, DuplicateResourceException,
                        # ValidationConstants, SecurityRules (functional interface),
-                       # EmailNormalizer
+                       # EmailNormalizer, SearchUtils
   auth/                # SecurityConfig, CorsProperties, JwtConfig, JwtService, Jwt,
-                       # JwtAuthenticationFilter, UserDetailsServiceImpl, AuthService,
-                       # AuthController, AuthSecurityRules, JwtResponse,
-                       # InvalidJwtAuthenticationException, LoginRequest,
-                       # RegisterRequest
+                       # JwtAuthenticationFilter, UserIdPrincipal, UserDetailsServiceImpl,
+                       # AuthService, AuthController, AuthSecurityRules, JwtResponse,
+                       # InvalidJwtAuthenticationException, LoginRequest, RegisterRequest
   users/               # User, Role, UserDto, UserCreateRequest, UserUpdateRequest,
                        # PasswordUpdateRequest, UserMapper, UserRepository,
                        # UserService, UserController, UserSecurityRules
   users/exceptions/    # PasswordMismatchException
-  accounts/            # (planned)
+  accounts/            # Account, AccountController, AccountMapper, AccountRepository,
+                       # AccountSecurityRules, AccountService, AccountSpecification,
+                       # AccountType (enum), AccountTypeEntity, AccountTypeRepository
+  accounts/dto/        # AccountCreateRequest, AccountResponse, CurrencyUpdateRequest,
+                       # UpdateAccountTypeRequest
   transactions/        # (planned)
 ```
 
@@ -65,19 +68,20 @@ Each domain package is self-contained with a controller at the domain root. Only
 - Each domain provides a `@Component` implementing `SecurityRules` (e.g., `UserSecurityRules`, `AuthSecurityRules`)
 - `SecurityConfig` collects all `SecurityRules` beans, applies them, then adds `anyRequest().authenticated()` as final catch-all
 - `PasswordEncoder` bean (BCrypt) defined in `SecurityConfig`
-- CORS config externalized via `CorsProperties` (`app.cors.*` in `application.yaml`)
+- CORS config externalized via `CorsProperties` (`app.cors.*` in `application.yaml`); uses `allowedOriginPatterns` for Spring 6+ credentials compatibility
 
 ### JWT Authentication
 
-- `Jwt` — immutable value object wrapping jjwt `Claims` + `SecretKey`; provides `isExpired()`, `getUserId()`, `getRole()`, `toString()`
-- `JwtConfig` — `@Configuration @Data` class with prefix `spring.jwt`; holds `secret`, `accessTokenExpiration`, `refreshTokenExpiration`; caches a `SecretKey` derived from the secret
-- `JwtService` — stateless token provider using jjwt; accepts a `User` entity, generates `Jwt` access/refresh tokens (includes email + role claims), parses and validates tokens (returns `Optional<Jwt>`)
-- `JwtAuthenticationFilter` — `OncePerRequestFilter` that extracts `Authorization: Bearer <token>` header, validates via `JwtService`, loads `User` by ID from JWT claims, creates `ROLE_USER`/`ROLE_ADMIN` authorities from role claim, sets `SecurityContextHolder`
-- `UserDetailsServiceImpl` — `UserDetailsService` implementation that loads user by email via `UserRepository.findByEmailIgnoreCase` (used by `AuthenticationManager` during login); creates authorities from user's role
-- `AuthService` — orchestrates login (delegates to `AuthenticationManager`, sets refresh token cookie), register (delegates to `UserService`, sets refresh token cookie), refresh (validates refresh token, rotates access token only), and `/me` (extracts email from `SecurityContextHolder`, returns current user)
+- `Jwt` — immutable value object wrapping jjwt `Claims` + `SecretKey`; provides `isExpired()`, `getUserId()`, `getRole()`, `getType()`, `isRefreshToken()`, `toString()`; tokens carry a `type` claim (`"access"` or `"refresh"`)
+- `JwtConfig` — `@Configuration @Getter @Setter` class with prefix `spring.jwt`; holds `secret`, `accessTokenExpiration`, `refreshTokenExpiration`; `@ToString.Exclude` on `secret` to prevent log leakage; caches `SecretKey` with thread-safe double-checked locking and UTF-8 encoding
+- `JwtService` — stateless token provider using jjwt; accepts a `User` entity, generates `Jwt` access/refresh tokens (includes email + role + type claims), parses and validates tokens (returns `Optional<Jwt>`)
+- `JwtAuthenticationFilter` — `OncePerRequestFilter` that extracts `Authorization: Bearer <token>` header, validates via `JwtService`, loads `User` by ID from JWT claims, creates `ROLE_USER`/`ROLE_ADMIN` authorities from role claim, stores `UserIdPrincipal` (id + email) in `SecurityContextHolder`
+- `UserIdPrincipal` — record holding user ID + email; stored in authentication principal for ownership checks in `@PreAuthorize` expressions; `toString()` returns email for backward compatibility with `AuthService.me()`
+- `UserDetailsServiceImpl` — `UserDetailsService` implementation that loads user by email via `UserService` (not `UserRepository` directly); catches `ResourceNotFoundException` and wraps as `UsernameNotFoundException`
+- `AuthService` — orchestrates login (delegates to `AuthenticationManager`, sets refresh token cookie), register (delegates to `UserService`, sets refresh token cookie), refresh (validates refresh token is actually a refresh token via type claim, rotates access token only), and `/me` (extracts email from `SecurityContextHolder`, returns current user)
 - `AuthController` — REST endpoints at `/api/v1/auth/*`; handles `InvalidJwtAuthenticationException` and `BadCredentialsException` with 401 responses; uses `@CookieValue("refreshToken")` for refresh; controller delegates cookie-setting to service; returns `JwtResponse(accessToken)` wrapped in `ApiResponse<T>`
 - `AuthSecurityRules` — permits unauthenticated access to `/api/v1/auth/login`, `/register`, `/refresh`; all other endpoints require authentication
-- No refresh token table — tokens are validated cryptographically (stateless); refresh rotates only the access token, the same refresh token is reused until expiration
+- No refresh token table — tokens are validated cryptographically (stateless); refresh rotates only the access token, the same refresh token is reused until expiration; access tokens cannot be used as refresh tokens (type claim validated)
 - Refresh token cookie named `refreshToken`, set as HttpOnly with SameSite=Lax, path `/api/v1/auth`
 
 ### API responses
@@ -93,7 +97,7 @@ Each domain package is self-contained with a controller at the domain root. Only
 - `MethodArgumentNotValidException` → 400 with field errors
 - `PasswordMismatchException` → 400 via `UserController` handler
 - `HttpRequestMethodNotSupportedException` → 405 via `GlobalExceptionHandler`
-- `HttpMessageNotReadableException` → 400 via `GlobalExceptionHandler`
+- `HttpMessageNotReadableException` → 400 via `GlobalExceptionHandler` (enum deserialization errors return valid values in message)
 - `MethodArgumentTypeMismatchException` → 400 via `GlobalExceptionHandler`
 
 ## Conventions
@@ -109,20 +113,23 @@ Each domain package is self-contained with a controller at the domain root. Only
 - `@RequiredArgsConstructor` on services (Lombok); `@AllArgsConstructor` on controllers with single dependency (Lombok)
 - `@Transactional` on write methods, `@Transactional(readOnly = true)` on read methods
 
-## Test inventory (82 tests)
+## Test inventory (130 tests)
 
 | Test class | Type | Count |
 |---|---|---|
-| `SecurityConfigTest` | `@SpringBootTest` integration | 9 |
+| `SecurityConfigTest` | `@SpringBootTest` integration | 12 |
 | `FinancetrackerApplicationTests` | `@SpringBootTest` | 1 |
 | `UserRepositoryTest` | `@DataJpaTest` | 6 |
 | `UserControllerTest` | `@WebMvcTest` (mocked service) | 14 |
 | `UserServiceTest` | `@ExtendWith(MockitoExtension.class)` | 17 |
-| `AuthControllerTest` | `@WebMvcTest` (mocked service) | 9 |
-| `AuthServiceTest` | `@ExtendWith(MockitoExtension.class)` | 8 |
-| `JwtServiceTest` | `@ExtendWith(MockitoExtension.class)` | 11 |
+| `AuthControllerTest` | `@WebMvcTest` (mocked service) | 10 |
+| `AuthServiceTest` | `@ExtendWith(MockitoExtension.class)` | 10 |
+| `JwtServiceTest` | `@ExtendWith(MockitoExtension.class)` | 13 |
 | `JwtAuthenticationFilterTest` | `@ExtendWith(MockitoExtension.class)` | 5 |
 | `UserDetailsServiceImplTest` | `@ExtendWith(MockitoExtension.class)` | 2 |
+| `AccountRepositoryTest` | `@DataJpaTest` | 8 |
+| `AccountControllerTest` | `@WebMvcTest` (mocked service) | 18 |
+| `AccountServiceTest` | `@ExtendWith(MockitoExtension.class)` | 14 |
 
 ## User domain endpoints
 
@@ -143,6 +150,7 @@ Each domain package is self-contained with a controller at the domain root. Only
 | POST | `/api/v1/auth/register` | permitAll | Register new user, returns user data and sets refresh token cookie |
 | POST | `/api/v1/auth/refresh` | permitAll | Refresh access token using refresh token |
 | GET | `/api/v1/auth/me` | authenticated | Get current authenticated user profile |
+| POST | `/api/v1/auth/logout` | authenticated | Clear refresh token cookie and security context |
 
 ## Implementation status
 
@@ -162,18 +170,60 @@ Each domain package is self-contained with a controller at the domain root. Only
 
 ### Phase 3: Auth/JWT — DONE
 - Role enum (USER, ADMIN) with `@Enumerated(EnumType.STRING)` on User entity
-- JwtConfig — `@Configuration @Data` with prefix `spring.jwt`; field `secret` (was `secretKey`); caches `SecretKey` derived from secret
-- JwtService — token generation (includes `role` claim), parsing (`Optional<Jwt>`), validation using jjwt; accepts `User` entity, returns `Jwt` objects
-- JwtAuthenticationFilter — extracts Bearer token, validates, loads `User` by ID from JWT claims, creates authorities from role claim, sets SecurityContext
-- UserDetailsServiceImpl — loads user by email, creates authorities from user's role
-- AuthService — login, register, refresh, /me orchestration; uses `UserService` (not `UserRepository`) for data access; refresh token cookie uses `ResponseCookie` with SameSite=Lax
+- JwtConfig — `@Configuration @Getter @Setter` with prefix `spring.jwt`; field `secret` (was `secretKey`); caches `SecretKey` derived from secret with thread-safe double-checked locking and UTF-8 encoding; `@ToString.Exclude` on `secret` prevents log leakage
+- JwtService — token generation (includes `role` + `type` claims), parsing (`Optional<Jwt>`), validation using jjwt; accepts `User` entity, returns `Jwt` objects; access and refresh tokens distinguished by `type` claim
+- JwtAuthenticationFilter — extracts Bearer token, validates, loads `User` by ID from JWT claims, creates authorities from role claim, stores `UserIdPrincipal` in SecurityContext
+- `UserIdPrincipal` — record holding user ID + email for ownership-based `@PreAuthorize` checks
+- UserDetailsServiceImpl — loads user by email via `UserService`, catches `ResourceNotFoundException` and wraps as `UsernameNotFoundException`
+- AuthService — login, register, refresh, /me orchestration; uses `UserService` (not `UserRepository`) for data access; refresh validates type claim (access tokens cannot be used as refresh tokens); refresh token cookie uses `ResponseCookie` with SameSite=Lax
 - AuthController — `/api/v1/auth/*` endpoints with exception handlers
 - AuthSecurityRules — permits unauthenticated access to login, register, refresh
 - Security filter chain: JWT filter inserted before `UsernamePasswordAuthenticationFilter`; `@EnableMethodSecurity` on SecurityConfig
 - `EmailNormalizer` utility for consistent email normalization
 - `ValidationConstants` now includes `EMAIL_REGEX` and `EMAIL_MESSAGE`
+- CORS config uses `allowedOriginPatterns` instead of `allowedOrigins` (Spring 6+ compatibility with credentials)
+- Consistent email validation: `LoginRequest` now uses `@Pattern(EMAIL_REGEX)` (same as `RegisterRequest`)
 - 36 new tests (8 controller + 7 service + 11 JWT service + 5 filter + 2 UserDetailsService + 3 integration)
 
-### Phase 4: Accounts — NOT STARTED
+### Phase 4: Accounts — DONE
+- Account entity with ownership (user_id), name, type (FK to account_types), balance, currency
+- AccountTypeEntity — reference/lookup table for CHECKING, SAVINGS, INVESTMENT
+- Full CRUD: create, read (by ID + paginated list), update (currency), delete (returns 204)
+- Ownership enforcement: all account operations filter by authenticated user
+- Dynamic filtering: search by name, filter by type and currency via JPA Specifications
+- MapStruct AccountMapper for entity ↔ DTO mapping
+- `@EntityGraph("Account.withType")` to prevent N+1 queries
+- `@PreAuthorize` on `PATCH /{id}/type` for ADMIN-only access
+- `SearchUtils` for LIKE wildcard escaping (prevents LIKE injection)
+- `AccountCreateRequest` name validation: 3-20 chars, alphanumeric only
+
 ### Phase 5: Transactions — NOT STARTED
-### Phase 6: Polish — NOT STARTED
+### Phase 6: Code Review Fixes — DONE
+- **Security**: JWT tokens now carry a `type` claim (`"access"`/`"refresh"`); access tokens cannot be used as refresh tokens
+- **Security**: `JwtConfig.secret` excluded from `toString()` via `@ToString.Exclude` to prevent log leakage
+- **Security**: `JwtConfig.getSecretKey()` uses thread-safe double-checked locking with `volatile` field
+- **Security**: UTF-8 encoding for JWT secret key derivation (`StandardCharsets.UTF_8`)
+- **Security**: `UserIdPrincipal` record stored in `SecurityContextHolder` for ownership-based `@PreAuthorize` checks
+- **Security**: User CRUD endpoints now enforce ownership — users can only view/update/delete their own profile; admin endpoints require `ROLE_ADMIN`
+- **Security**: CORS uses `allowedOriginPatterns` instead of `allowedOrigins` (Spring 6+ compatibility)
+- **Architecture**: `UserDetailsServiceImpl` now uses `UserService` (not `UserRepository` directly); wraps `ResourceNotFoundException` as `UsernameNotFoundException`
+- **Architecture**: Removed redundant service-level role check from `AccountService.updateAccountType()` (controller's `@PreAuthorize` is sufficient)
+- **Code Quality**: `JwtService.parseToken()` returns `Optional<Jwt>` instead of nullable
+- **Code Quality**: `Jwt.getType()` and `Jwt.isRefreshToken()` added for token type discrimination
+- **Code Quality**: `LoginRequest` email validation uses `@Pattern(EMAIL_REGEX)` (consistent with `RegisterRequest`)
+- **Code Quality**: `UserDto` now includes `role` field
+- **Code Quality**: `AccountSpecification.nameContains` handles null/blank input safely
+- **Code Quality**: `AccountCreateRequest` name minimum reduced from 10 to 3 characters
+- **Code Quality**: Fixed fully qualified class name in `AuthService.register()`
+- **Testing**: `AccountServiceTest` now properly cleans up `SecurityContextHolder` in `@AfterEach`
+- **Testing**: `AccountRepositoryTest` assertion uses `getContent()` for clarity
+- **Testing**: `AuthServiceTest` covers access-token-as-refresh-token rejection
+- **Testing**: `FinancetrackerApplicationTests` has `@DisplayName` annotation
+- **Testing**: Removed unnecessary `UserService` mock from `AuthControllerTest`
+- **DB**: `AccountRepositoryTest` assertion uses `getContent()` for clarity
+
+### Phase 7: Enum Error Handling — DONE
+- `GlobalExceptionHandler.handleMalformedRequest()` now detects `InvalidFormatException` from Jackson enum deserialization failures
+- Returns clear message: `"Invalid value 'X' for field 'type'. Allowed values are: CHECKING, SAVINGS, INVESTMENT"`
+- Works for any enum field in any request body (not just `AccountType`)
+- 4 new tests: invalid enum on `POST /accounts`, `PATCH /accounts/{id}/type`, lowercase enum, empty string enum

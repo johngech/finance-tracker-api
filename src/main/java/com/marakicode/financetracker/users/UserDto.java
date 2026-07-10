@@ -7,5 +7,6 @@ public record UserDto(
     String firstName,
     String lastName,
     String email,
+    Role role,
     LocalDateTime createdAt
 ) {}

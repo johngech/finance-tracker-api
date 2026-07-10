@@ -2,6 +2,7 @@ package com.marakicode.financetracker.auth;
 
 import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.UserDto;
+import com.marakicode.financetracker.users.UserCreateRequest;
 import com.marakicode.financetracker.users.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,7 @@ public class AuthService {
     }
 
     public UserDto register(RegisterRequest request, HttpServletResponse response) {
-        var userDto = userService.createUser(new com.marakicode.financetracker.users.UserCreateRequest(
+        var userDto = userService.createUser(new UserCreateRequest(
                 request.firstName(), request.lastName(), request.email(), request.password()));
         var user = userService.findByEmail(request.email());
         String refreshToken = jwtService.generateRefreshToken(user).toString();
@@ -39,7 +40,7 @@ public class AuthService {
     public JwtResponse refresh(String refreshToken) {
         var jwt = jwtService.parseToken(refreshToken);
         validateRefreshToken(jwt);
-        var user = userService.findById(jwt.getUserId());
+        var user = userService.findById(jwt.get().getUserId());
         String accessToken = jwtService.generateAccessToken(user).toString();
         return new JwtResponse(accessToken);
     }
@@ -52,6 +53,11 @@ public class AuthService {
         }
         String email = auth.getName();
         return userService.getUserByEmail(email);
+    }
+
+    public void logout(HttpServletResponse response) {
+        SecurityContextHolder.clearContext();
+        deleteRefreshTokenCookie(response);
     }
 
     private JwtResponse generateTokenPair(com.marakicode.financetracker.users.User user, HttpServletResponse response) {
@@ -72,12 +78,27 @@ public class AuthService {
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
-    private void validateRefreshToken(Jwt jwt) {
-        if (jwt == null) {
+    private void deleteRefreshTokenCookie(HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Lax")
+                .path("/api/v1/auth")
+                .maxAge(0)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private void validateRefreshToken(java.util.Optional<Jwt> jwtOpt) {
+        if (jwtOpt.isEmpty()) {
             throw new InvalidJwtAuthenticationException("Invalid refresh token");
         }
+        var jwt = jwtOpt.get();
         if (jwt.isExpired()) {
             throw new InvalidJwtAuthenticationException("Refresh token has expired");
+        }
+        if (!jwt.isRefreshToken()) {
+            throw new InvalidJwtAuthenticationException("Token is not a refresh token");
         }
     }
 

@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 
 public record AccountCreateRequest(
     @NotBlank(message = "Account name is required")
-    @Size(min = 10, max = 20, message = "Account name must be between 10 and 20 characters")
+    @Size(min = 3, max = 20, message = "Account name must be between 3 and 20 characters")
     @Pattern(regexp = "^[a-zA-Z0-9]+$", message = "Account name must contain only letters and numbers")
     String name,
 

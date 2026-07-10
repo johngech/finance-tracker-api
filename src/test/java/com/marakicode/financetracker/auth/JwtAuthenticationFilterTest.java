@@ -13,10 +13,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,10 +64,12 @@ class JwtAuthenticationFilterTest {
                 .subject("1")
                 .add("email", "alice@example.com")
                 .add("role", "USER")
+                .add("type", "access")
                 .expiration(new java.util.Date(System.currentTimeMillis() + 900000))
                 .build();
         javax.crypto.SecretKey key = io.jsonwebtoken.security.Keys.hmacShaKeyFor(
-                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970".getBytes());
+                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+                        .getBytes(StandardCharsets.UTF_8));
         return new Jwt(key, claims);
     }
 
@@ -79,7 +81,7 @@ class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", BEARER_PREFIX + VALID_TOKEN);
         Jwt jwt = validJwt();
 
-        when(jwtService.parseToken(VALID_TOKEN)).thenReturn(jwt);
+        when(jwtService.parseToken(VALID_TOKEN)).thenReturn(Optional.of(jwt));
         when(userService.findById(1L)).thenReturn(testUser());
 
         // Act
@@ -88,8 +90,10 @@ class JwtAuthenticationFilterTest {
         // Assert
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         assertThat(authentication).isNotNull();
-        assertThat(authentication).isInstanceOf(UsernamePasswordAuthenticationToken.class);
-        assertThat(authentication.getName()).isEqualTo("alice@example.com");
+        assertThat(authentication.getPrincipal()).isInstanceOf(UserIdPrincipal.class);
+        var principal = (UserIdPrincipal) authentication.getPrincipal();
+        assertThat(principal.id()).isEqualTo(1L);
+        assertThat(principal.email()).isEqualTo("alice@example.com");
         assertThat(authentication.getAuthorities())
                 .extracting("authority")
                 .containsExactly("ROLE_USER");
@@ -115,7 +119,7 @@ class JwtAuthenticationFilterTest {
 
         // Arrange
         request.addHeader("Authorization", BEARER_PREFIX + "invalid.token");
-        when(jwtService.parseToken("invalid.token")).thenReturn(null);
+        when(jwtService.parseToken("invalid.token")).thenReturn(Optional.empty());
 
         // Act
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
@@ -135,13 +139,15 @@ class JwtAuthenticationFilterTest {
                 .subject("1")
                 .add("email", "alice@example.com")
                 .add("role", "USER")
+                .add("type", "access")
                 .expiration(new java.util.Date(System.currentTimeMillis() - 1000))
                 .build();
         javax.crypto.SecretKey key = io.jsonwebtoken.security.Keys.hmacShaKeyFor(
-                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970".getBytes());
+                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+                        .getBytes(StandardCharsets.UTF_8));
         Jwt expiredJwt = new Jwt(key, expiredClaims);
 
-        when(jwtService.parseToken(VALID_TOKEN)).thenReturn(expiredJwt);
+        when(jwtService.parseToken(VALID_TOKEN)).thenReturn(Optional.of(expiredJwt));
 
         // Act
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);

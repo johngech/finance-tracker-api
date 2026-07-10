@@ -129,7 +129,7 @@ class AccountRepositoryTest {
         var result = accountRepository.findByUserId(savedUser.getId(), PageRequest.of(0, 10));
 
         // Assert
-        assertThat(result).hasSize(2);
+        assertThat(result.getContent()).hasSize(2);
     }
 
     @Test

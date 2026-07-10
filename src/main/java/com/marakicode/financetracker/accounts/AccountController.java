@@ -52,7 +52,7 @@ public class AccountController {
             @PathVariable Long id,
             @Valid @RequestBody CurrencyUpdateRequest request) {
         AccountResponse response = accountService.updateAccount(id, request);
-        return ResponseEntity.ok(ApiResponse.success("Account updated successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Currency updated successfully", response));
     }
 
     @PatchMapping("/{id}/type")

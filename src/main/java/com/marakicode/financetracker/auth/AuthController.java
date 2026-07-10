@@ -51,6 +51,12 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", jwtResponse));
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletResponse response) {
+        authService.logout(response);
+        return ResponseEntity.ok(ApiResponse.success("Logged out successfully", null));
+    }
+
     @ExceptionHandler(InvalidJwtAuthenticationException.class)
     public ResponseEntity<ErrorDto> handleInvalidJwtAuthentication(
             InvalidJwtAuthenticationException ex,

@@ -2,9 +2,12 @@ package com.marakicode.financetracker.auth;
 
 import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.User;
+import com.marakicode.financetracker.users.UserCreateRequest;
 import com.marakicode.financetracker.users.UserDto;
 import com.marakicode.financetracker.users.UserService;
+import com.marakicode.financetracker.users.Role;
 import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,12 +20,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +50,11 @@ class AuthServiceTest {
     @InjectMocks
     private AuthService authService;
 
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
     private User testUser() {
         User user = new User();
         user.setId(1L);
@@ -52,27 +63,45 @@ class AuthServiceTest {
         return user;
     }
 
-    private Jwt testJwt(Long userId) {
+    private Jwt testRefreshJwt(Long userId) {
         io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.claims()
                 .subject(userId.toString())
                 .add("email", "alice@example.com")
                 .add("role", "USER")
+                .add("type", "refresh")
                 .expiration(new Date(System.currentTimeMillis() + 900000))
                 .build();
         javax.crypto.SecretKey key = io.jsonwebtoken.security.Keys.hmacShaKeyFor(
-                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970".getBytes());
+                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+                        .getBytes(StandardCharsets.UTF_8));
         return new Jwt(key, claims);
     }
 
-    private Jwt expiredTestJwt(Long userId) {
+    private Jwt expiredTestRefreshJwt(Long userId) {
         io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.claims()
                 .subject(userId.toString())
                 .add("email", "alice@example.com")
                 .add("role", "USER")
+                .add("type", "refresh")
                 .expiration(new Date(System.currentTimeMillis() - 1000))
                 .build();
         javax.crypto.SecretKey key = io.jsonwebtoken.security.Keys.hmacShaKeyFor(
-                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970".getBytes());
+                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+                        .getBytes(StandardCharsets.UTF_8));
+        return new Jwt(key, claims);
+    }
+
+    private Jwt testAccessJwt(Long userId) {
+        io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.claims()
+                .subject(userId.toString())
+                .add("email", "alice@example.com")
+                .add("role", "USER")
+                .add("type", "access")
+                .expiration(new Date(System.currentTimeMillis() + 900000))
+                .build();
+        javax.crypto.SecretKey key = io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+                        .getBytes(StandardCharsets.UTF_8));
         return new Jwt(key, claims);
     }
 
@@ -83,8 +112,8 @@ class AuthServiceTest {
         // Arrange
         var loginRequest = new LoginRequest("alice@example.com", "Secret123!");
         var user = testUser();
-        var accessJwt = testJwt(1L);
-        var refreshJwt = testJwt(1L);
+        var accessJwt = testAccessJwt(1L);
+        var refreshJwt = testRefreshJwt(1L);
 
         when(userService.findByEmail("alice@example.com")).thenReturn(user);
         when(jwtService.generateAccessToken(user)).thenReturn(accessJwt);
@@ -126,10 +155,10 @@ class AuthServiceTest {
         // Arrange
         var registerRequest = new RegisterRequest("Alice", "Smith", "alice@example.com", "Secret123!");
         var user = testUser();
-        var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", LocalDateTime.now());
-        var refreshJwt = testJwt(1L);
+        var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER, LocalDateTime.now());
+        var refreshJwt = testRefreshJwt(1L);
 
-        when(userService.createUser(any(com.marakicode.financetracker.users.UserCreateRequest.class)))
+        when(userService.createUser(any(UserCreateRequest.class)))
                 .thenReturn(userDto);
         when(userService.findByEmail("alice@example.com")).thenReturn(user);
         when(jwtService.generateRefreshToken(user)).thenReturn(refreshJwt);
@@ -143,7 +172,7 @@ class AuthServiceTest {
         assertThat(result.firstName()).isEqualTo("Alice");
         assertThat(result.lastName()).isEqualTo("Smith");
         assertThat(result.email()).isEqualTo("alice@example.com");
-        verify(userService).createUser(any(com.marakicode.financetracker.users.UserCreateRequest.class));
+        verify(userService).createUser(any(UserCreateRequest.class));
         verify(httpResponse).addHeader(any(), any());
     }
 
@@ -153,10 +182,10 @@ class AuthServiceTest {
 
         // Arrange
         var user = testUser();
-        var jwt = testJwt(1L);
-        var newAccessJwt = testJwt(1L);
+        var jwt = testRefreshJwt(1L);
+        var newAccessJwt = testAccessJwt(1L);
 
-        when(jwtService.parseToken("valid.refresh.token")).thenReturn(jwt);
+        when(jwtService.parseToken("valid.refresh.token")).thenReturn(Optional.of(jwt));
         when(userService.findById(1L)).thenReturn(user);
         when(jwtService.generateAccessToken(user)).thenReturn(newAccessJwt);
 
@@ -175,7 +204,7 @@ class AuthServiceTest {
     void refresh_shouldThrow_whenInvalidRefreshToken() {
 
         // Arrange
-        when(jwtService.parseToken("invalid.refresh.token")).thenReturn(null);
+        when(jwtService.parseToken("invalid.refresh.token")).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThatThrownBy(() -> authService.refresh("invalid.refresh.token"))
@@ -188,8 +217,8 @@ class AuthServiceTest {
     void refresh_shouldThrow_whenExpiredRefreshToken() {
 
         // Arrange
-        var expiredJwt = expiredTestJwt(1L);
-        when(jwtService.parseToken("expired.refresh.token")).thenReturn(expiredJwt);
+        var expiredJwt = expiredTestRefreshJwt(1L);
+        when(jwtService.parseToken("expired.refresh.token")).thenReturn(Optional.of(expiredJwt));
 
         // Act & Assert
         assertThatThrownBy(() -> authService.refresh("expired.refresh.token"))
@@ -198,12 +227,27 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("refresh should throw InvalidJwtAuthenticationException when access token is used as refresh token")
+    void refresh_shouldThrow_whenAccessTokenUsedAsRefreshToken() {
+
+        // Arrange
+        var accessJwt = testAccessJwt(1L);
+        when(jwtService.parseToken("access.token.used.as.refresh")).thenReturn(Optional.of(accessJwt));
+
+        // Act & Assert
+        assertThatThrownBy(() -> authService.refresh("access.token.used.as.refresh"))
+                .isInstanceOf(InvalidJwtAuthenticationException.class)
+                .hasMessageContaining("Token is not a refresh token");
+    }
+
+    @Test
     @DisplayName("me should return UserDto when authenticated user exists in database")
     void me_shouldReturnUserDto_whenAuthenticated() {
 
         // Arrange
         var user = testUser();
-        var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", LocalDateTime.of(2025, 1, 15, 10, 30));
+        var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER,
+                LocalDateTime.of(2025, 1, 15, 10, 30));
 
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
@@ -220,8 +264,6 @@ class AuthServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.email()).isEqualTo("alice@example.com");
         assertThat(result.firstName()).isEqualTo("Alice");
-
-        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -242,7 +284,23 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.me())
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("User not found with email: nonexistent@example.com");
+    }
 
-        SecurityContextHolder.clearContext();
+    @Test
+    @DisplayName("logout should clear SecurityContext and delete refresh token cookie")
+    void logout_shouldClearContext_andDeleteCookie() {
+
+        // Arrange
+        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        securityContext.setAuthentication(authentication);
+        SecurityContextHolder.setContext(securityContext);
+
+        // Act
+        authService.logout(httpResponse);
+
+        // Assert
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(httpResponse).addHeader(any(), any());
     }
 }

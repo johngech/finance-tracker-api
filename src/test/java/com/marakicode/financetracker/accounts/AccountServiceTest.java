@@ -10,6 +10,7 @@ import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.Role;
 import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -76,6 +77,11 @@ class AccountServiceTest {
         org.mockito.Mockito.lenient().when(authentication.getName()).thenReturn("alice@example.com");
         securityContext.setAuthentication(authentication);
         SecurityContextHolder.setContext(securityContext);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     private Account sampleAccount() {
@@ -274,7 +280,6 @@ class AccountServiceTest {
     @DisplayName("updateAccountType_shouldReturnResponse_whenAdmin - updates account type for admin")
     void updateAccountType_shouldReturnResponse_whenAdmin() {
         // Arrange
-        sampleUser.setRole(Role.ADMIN);
         var request = new UpdateAccountTypeRequest(AccountType.SAVINGS);
         var account = sampleAccount();
         var savingsEntity = new AccountTypeEntity();
@@ -283,7 +288,6 @@ class AccountServiceTest {
         var response = new AccountResponse(1L, "Checking123", AccountType.SAVINGS,
                 new BigDecimal("1000.00"), "USD", LocalDateTime.now());
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findById(1L)).thenReturn(Optional.of(account));
         when(accountTypeRepository.findByName("SAVINGS")).thenReturn(Optional.of(savingsEntity));
         when(accountRepository.save(account)).thenReturn(account);
@@ -302,31 +306,14 @@ class AccountServiceTest {
     @DisplayName("updateAccountType_shouldThrow_whenNotFound - throws ResourceNotFoundException for nonexistent account")
     void updateAccountType_shouldThrow_whenNotFound() {
         // Arrange
-        sampleUser.setRole(Role.ADMIN);
         var request = new UpdateAccountTypeRequest(AccountType.SAVINGS);
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findById(999L)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThatThrownBy(() -> accountService.updateAccountType(999L, request))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Account not found with id: 999");
-    }
-
-    @Test
-    @DisplayName("updateAccountType_shouldThrow_whenNotAdmin - throws AccessDeniedException for non-admin user")
-    void updateAccountType_shouldThrow_whenNotAdmin() {
-        // Arrange
-        sampleUser.setRole(Role.USER);
-        var request = new UpdateAccountTypeRequest(AccountType.SAVINGS);
-
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
-
-        // Act & Assert
-        assertThatThrownBy(() -> accountService.updateAccountType(1L, request))
-                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
-                .hasMessageContaining("Only administrators");
     }
 
     @Test

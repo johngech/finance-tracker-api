@@ -148,12 +148,20 @@ class SecurityConfigTest {
     // ── JWT-authenticated access tests ─────────────────────────────
 
     @Test
-    @DisplayName("GET /api/v1/users should return 200 when valid JWT is provided")
-    void getUsers_shouldReturn200_whenValidJwt() throws Exception {
+    @DisplayName("GET /api/v1/users should return 200 when ADMIN provides valid JWT")
+    void getUsers_shouldReturn200_whenAdminJwt() throws Exception {
         mockMvc.perform(get("/api/v1/users")
-                        .header("Authorization", "Bearer " + validBearerToken))
+                        .header("Authorization", "Bearer " + adminBearerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/users should return 403 when regular USER provides valid JWT")
+    void getUsers_shouldReturn403_whenRegularUserJwt() throws Exception {
+        mockMvc.perform(get("/api/v1/users")
+                        .header("Authorization", "Bearer " + validBearerToken))
+                .andExpect(status().isForbidden());
     }
 
     @Test

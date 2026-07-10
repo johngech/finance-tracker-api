@@ -11,9 +11,13 @@ public class AccountSpecification {
     }
 
     public static Specification<Account> nameContains(String search) {
-        return (root, query, cb) ->
-                cb.like(cb.lower(root.get("name")),
-                        SearchUtils.toLikeContainsPattern(search.toLowerCase()));
+        return (root, query, cb) -> {
+            if (search == null || search.isBlank()) {
+                return cb.conjunction();
+            }
+            return cb.like(cb.lower(root.get("name")),
+                    SearchUtils.toLikeContainsPattern(search.toLowerCase()));
+        };
     }
 
     public static Specification<Account> typeEquals(AccountType type) {

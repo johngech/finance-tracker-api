@@ -9,6 +9,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,7 +29,8 @@ class JwtServiceTest {
 
     private void stubSecret() {
         when(jwtConfig.getSecretKey())
-                .thenReturn(io.jsonwebtoken.security.Keys.hmacShaKeyFor(TEST_SECRET.getBytes()));
+                .thenReturn(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                        TEST_SECRET.getBytes(StandardCharsets.UTF_8)));
     }
 
     private User testUser() {
@@ -70,7 +72,7 @@ class JwtServiceTest {
     }
 
     @Test
-    @DisplayName("parseToken should return Jwt when given a valid token")
+    @DisplayName("parseToken should return Optional Jwt when given a valid token")
     void parseToken_shouldReturnJwt_whenValidToken() {
         // Arrange
         stubSecret();
@@ -78,25 +80,25 @@ class JwtServiceTest {
         Jwt generated = jwtService.generateAccessToken(testUser());
 
         // Act
-        Jwt parsed = jwtService.parseToken(generated.toString());
+        Optional<Jwt> parsed = jwtService.parseToken(generated.toString());
 
         // Assert
-        assertThat(parsed).isNotNull();
-        assertThat(parsed.getUserId()).isEqualTo(1L);
-        assertThat(parsed.isExpired()).isFalse();
+        assertThat(parsed).isPresent();
+        assertThat(parsed.get().getUserId()).isEqualTo(1L);
+        assertThat(parsed.get().isExpired()).isFalse();
     }
 
     @Test
-    @DisplayName("parseToken should return null when given an invalid token")
-    void parseToken_shouldReturnNull_whenInvalidToken() {
+    @DisplayName("parseToken should return empty Optional when given an invalid token")
+    void parseToken_shouldReturnEmpty_whenInvalidToken() {
         // Arrange
         stubSecret();
 
         // Act
-        Jwt result = jwtService.parseToken("invalid.token.string");
+        Optional<Jwt> result = jwtService.parseToken("invalid.token.string");
 
         // Assert
-        assertThat(result).isNull();
+        assertThat(result).isEmpty();
     }
 
     @Test
@@ -161,6 +163,32 @@ class JwtServiceTest {
 
         // Act & Assert
         assertThat(jwt.getRole()).isEqualTo("USER");
+    }
+
+    @Test
+    @DisplayName("generateAccessToken should include type claim as 'access'")
+    void generateAccessToken_shouldIncludeTypeAccessClaim() {
+        // Arrange
+        stubSecret();
+        when(jwtConfig.getAccessTokenExpiration()).thenReturn(900000L);
+        Jwt jwt = jwtService.generateAccessToken(testUser());
+
+        // Act & Assert
+        assertThat(jwt.getType()).isEqualTo("access");
+        assertThat(jwt.isRefreshToken()).isFalse();
+    }
+
+    @Test
+    @DisplayName("generateRefreshToken should include type claim as 'refresh'")
+    void generateRefreshToken_shouldIncludeTypeRefreshClaim() {
+        // Arrange
+        stubSecret();
+        when(jwtConfig.getRefreshTokenExpiration()).thenReturn(604800000L);
+        Jwt jwt = jwtService.generateRefreshToken(testUser());
+
+        // Act & Assert
+        assertThat(jwt.getType()).isEqualTo("refresh");
+        assertThat(jwt.isRefreshToken()).isTrue();
     }
 
     @Test

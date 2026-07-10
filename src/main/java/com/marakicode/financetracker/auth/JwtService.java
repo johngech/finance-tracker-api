@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.Optional;
 
 @AllArgsConstructor
 @Service
@@ -15,18 +16,19 @@ public class JwtService {
     private final JwtConfig jwtConfig;
 
     public Jwt generateAccessToken(User user) {
-        return generateToken(user, jwtConfig.getAccessTokenExpiration());
+        return generateToken(user, jwtConfig.getAccessTokenExpiration(), Jwt.TYPE_ACCESS);
     }
 
     public Jwt generateRefreshToken(User user) {
-        return generateToken(user, jwtConfig.getRefreshTokenExpiration());
+        return generateToken(user, jwtConfig.getRefreshTokenExpiration(), Jwt.TYPE_REFRESH);
     }
 
-    private Jwt generateToken(User user, long tokenExpiration) {
+    private Jwt generateToken(User user, long tokenExpiration, String type) {
         var claims = Jwts.claims()
                 .subject(user.getId().toString())
                 .add("email", user.getEmail())
                 .add("role", user.getRole().name())
+                .add("type", type)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + tokenExpiration * 1000))
                 .build();
@@ -41,11 +43,17 @@ public class JwtService {
                 .getPayload();
     }
 
-    public Jwt parseToken(String token) {
+    /**
+     * Parses and validates a JWT token string.
+     *
+     * @return an {@link Optional} containing the parsed {@link Jwt}, or empty if the token
+     *         is invalid, malformed, or cannot be verified.
+     */
+    public Optional<Jwt> parseToken(String token) {
         try {
-            return new Jwt(jwtConfig.getSecretKey(), getClaims(token));
+            return Optional.of(new Jwt(jwtConfig.getSecretKey(), getClaims(token)));
         } catch (JwtException ex) {
-            return null;
+            return Optional.empty();
         }
     }
 

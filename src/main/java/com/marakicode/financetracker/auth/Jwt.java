@@ -12,6 +12,9 @@ public class Jwt {
     private final SecretKey secretKey;
     private final Claims claims;
 
+    public static final String TYPE_ACCESS = "access";
+    public static final String TYPE_REFRESH = "refresh";
+
     public boolean isExpired() {
         return claims.getExpiration().before(new Date());
     }
@@ -22,6 +25,19 @@ public class Jwt {
 
     public String getRole() {
         return claims.get("role", String.class);
+    }
+
+    /**
+     * Returns the token type claim ("access" or "refresh").
+     * Tokens without a type claim are treated as access tokens for backward compatibility.
+     */
+    public String getType() {
+        String type = claims.get("type", String.class);
+        return type != null ? type : TYPE_ACCESS;
+    }
+
+    public boolean isRefreshToken() {
+        return TYPE_REFRESH.equals(getType());
     }
 
     @Override

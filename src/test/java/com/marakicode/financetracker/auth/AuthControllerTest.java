@@ -3,6 +3,7 @@ package com.marakicode.financetracker.auth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.users.UserDto;
+import com.marakicode.financetracker.users.Role;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -37,10 +39,7 @@ class AuthControllerTest {
     private AuthService authService;
 
     @MockitoBean
-    private JwtService jwtService;
-
-    @MockitoBean
-    private com.marakicode.financetracker.users.UserService userService;
+    private JwtService jwtService; // Required for context loading (JwtAuthenticationFilter bean)
 
     @Test
     @DisplayName("login should return 200 with access token when valid credentials are provided")
@@ -103,7 +102,7 @@ class AuthControllerTest {
 
         // Arrange
         var request = new RegisterRequest("Alice", "Smith", "alice@example.com", "Secret123!");
-        var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", LocalDateTime.of(2025, 1, 15, 10, 30));
+        var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER, LocalDateTime.of(2025, 1, 15, 10, 30));
         when(authService.register(any(RegisterRequest.class), any())).thenReturn(userDto);
 
         // Act & Assert
@@ -186,7 +185,7 @@ class AuthControllerTest {
     void me_shouldReturn200_whenAuthenticated() throws Exception {
 
         // Arrange
-        var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", LocalDateTime.of(2025, 1, 15, 10, 30));
+        var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER, LocalDateTime.of(2025, 1, 15, 10, 30));
         when(authService.me()).thenReturn(userDto);
 
         // Act & Assert
@@ -196,5 +195,20 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.firstName").value("Alice"))
                 .andExpect(jsonPath("$.data.lastName").value("Smith"))
                 .andExpect(jsonPath("$.data.email").value("alice@example.com"));
+    }
+
+    @Test
+    @DisplayName("logout should return 200 and clear refresh token cookie when authenticated")
+    @WithMockUser(username = "alice@example.com")
+    void logout_shouldReturn200_whenAuthenticated() throws Exception {
+
+        // Arrange
+        doNothing().when(authService).logout(any());
+
+        // Act & Assert
+        mockMvc.perform(post("/api/v1/auth/logout"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Logged out successfully"));
     }
 }

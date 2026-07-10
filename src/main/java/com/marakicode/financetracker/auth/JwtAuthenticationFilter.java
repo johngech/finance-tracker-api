@@ -1,5 +1,6 @@
 package com.marakicode.financetracker.auth;
 
+import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -11,7 +12,6 @@ import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -69,9 +69,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void extractAndSetAuthentication(String jwtToken, HttpServletRequest request) {
-        var jwt = jwtService.parseToken(jwtToken);
+        var jwtOpt = jwtService.parseToken(jwtToken);
 
-        if (jwt == null || jwt.isExpired()) {
+        if (jwtOpt.isEmpty()) {
+            return;
+        }
+
+        var jwt = jwtOpt.get();
+
+        if (jwt.isExpired()) {
             return;
         }
 
@@ -81,20 +87,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         var user = userService.findById(jwt.getUserId());
 
+        var authToken = getAuthToken(jwt, user);
+        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authToken);
+    }
+
+    /**
+     *
+     * Store UserIdPrincipal so @PreAuthorize can check ownership by ID,
+     *  and authentication.getName() returns the email (via toString) for AuthService.me().
+     */
+    private static UsernamePasswordAuthenticationToken getAuthToken(Jwt jwt, User user) {
         String role = jwt.getRole();
         var authorities = role != null
                 ? List.of(new SimpleGrantedAuthority("ROLE_" + role))
                 : Collections.<SimpleGrantedAuthority>emptyList();
 
-        UserDetails userDetails = new org.springframework.security.core.userdetails.User(
-                user.getEmail(), user.getPasswordHash(), authorities);
-        setAuthentication(userDetails, request);
-    }
-
-    private void setAuthentication(UserDetails userDetails, HttpServletRequest request) {
-        var authToken = new UsernamePasswordAuthenticationToken(
-                userDetails, null, userDetails.getAuthorities());
-        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-        SecurityContextHolder.getContext().setAuthentication(authToken);
+        var principal = new UserIdPrincipal(user.getId(), user.getEmail());
+        return new UsernamePasswordAuthenticationToken(
+                principal, null, authorities);
     }
 }
+

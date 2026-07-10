@@ -30,12 +30,14 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id()")
     public ResponseEntity<ApiResponse<UserDto>> getUser(@PathVariable Long id) {
         UserDto userResponse = userService.getUserById(id);
         return ResponseEntity.ok(ApiResponse.success(userResponse));
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PagedResponse<UserDto>>> getUsers(
             @PageableDefault(page = 0, size = 10) Pageable pageable) {
         PagedResponse<UserDto> pagedResponse = userService.getAllUsers(pageable);
@@ -43,6 +45,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id()")
     public ResponseEntity<ApiResponse<UserDto>> updateUser(
             @PathVariable Long id,
             @Valid @RequestBody UserUpdateRequest request) {
@@ -51,12 +54,14 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id()")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/change-password")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id()")
     public ResponseEntity<ApiResponse<Void>> updatePassword(
             @PathVariable Long id,
             @Valid @RequestBody PasswordUpdateRequest request) {

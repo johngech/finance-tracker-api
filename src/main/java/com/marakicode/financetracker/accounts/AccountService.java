@@ -7,13 +7,11 @@ import com.marakicode.financetracker.accounts.dto.UpdateAccountTypeRequest;
 import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
-import com.marakicode.financetracker.users.Role;
 import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,7 +69,9 @@ public class AccountService {
             specs.add(AccountSpecification.currencyEquals(currency));
         }
 
-        Specification<Account> spec = specs.stream().reduce(Specification::and).orElse(null);
+        Specification<Account> spec = specs.stream()
+                .reduce(Specification::and)
+                .orElse(null);
 
         var page = accountRepository.findAll(spec, pageable);
         return PagedResponse.fromPage(page, accountMapper::toResponse);
@@ -88,10 +88,6 @@ public class AccountService {
 
     @Transactional
     public AccountResponse updateAccountType(Long id, UpdateAccountTypeRequest request) {
-        User user = getCurrentUser();
-        if (user.getRole() != Role.ADMIN) {
-            throw new AccessDeniedException("Only administrators can change account types");
-        }
         Account account = accountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + id));
         account.setType(resolveType(request.type()));
