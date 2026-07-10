@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -43,6 +44,18 @@ public class GlobalExceptionHandler {
                 .body(ErrorDto.of(
                         HttpStatus.NOT_FOUND.value(),
                         "Not Found",
+                        ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorDto> handleAccessDeniedException(
+            AccessDeniedException ex, HttpServletRequest request) {
+        log.debug("Access denied on {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorDto.of(
+                        HttpStatus.FORBIDDEN.value(),
+                        "Forbidden",
                         ex.getMessage(),
                         request.getRequestURI()));
     }
