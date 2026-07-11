@@ -14,12 +14,3 @@
     # Maven wrapper
     '''\.mvn/''',
   ]
-
-# Custom rule overrides
-[[rules]]
-  id = "fake-test-secret"
-  description = "Allow fake secrets in test configuration"
-  regex = '''(?i)(secret|password|token)\s*[:=]\s*\S+'''
-  path = '''src/test/resources/.*'''
-  [rules.allowlist]
-    description = "Test config false positive"
