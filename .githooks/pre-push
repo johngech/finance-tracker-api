@@ -1,0 +1,52 @@
+#!/bin/sh
+#
+# pre-push hook — Compile + Test gate
+#
+# Blocks push if compilation fails or any test fails.
+# Ensures broken code never reaches the remote.
+#
+# Skip: git push --no-verify
+#       SKIP_PUSH_HOOKS=1 git push
+#
+
+set -e
+
+# Allow bypass via environment variable
+if [ "${SKIP_PUSH_HOOKS}" = "1" ]; then
+    echo "⏭  Skipping pre-push hook (SKIP_PUSH_HOOKS=1)"
+    exit 0
+fi
+
+# Ensure we're in the project root (where pom.xml lives)
+if [ ! -f "pom.xml" ]; then
+    echo "⚠  pom.xml not found — skipping pre-push hook."
+    exit 0
+fi
+
+echo ""
+echo "🔧 Pre-push: compiling..."
+
+START_TIME=$(date +%s)
+
+if ! mvn compile -q 2>&1; then
+    echo ""
+    echo "❌ Compilation failed! Fix errors before pushing."
+    exit 1
+fi
+
+echo "✅ Compilation passed."
+echo ""
+echo "🧪 Pre-push: running tests..."
+
+if ! mvn test -q 2>&1; then
+    echo ""
+    echo "❌ Tests failed! Fix failing tests before pushing."
+    exit 1
+fi
+
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
+
+echo "✅ All tests passed."
+echo "⏱  Pre-push completed in ${ELAPSED}s."
+echo ""

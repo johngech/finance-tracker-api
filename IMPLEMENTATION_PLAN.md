@@ -398,6 +398,53 @@ com.marakicode.financetracker/
 
 ---
 
+### Phase 13: CI/CD, Git Hooks & Static Analysis — DONE
+
+**Goal:** Automated CI pipeline, local developer safety hooks, and security-focused static analysis tooling.
+
+**What was delivered:**
+
+| Category | What |
+|----------|------|
+| **Maven Plugins** | OWASP Dependency-Check (`12.1.1`) — scans dependencies for known CVEs, fails on CVSS ≥ 7, bound to `verify` phase. SpotBugs + FindSecBugs (`4.8.6.6` / `1.13.0`) — code-level vulnerability detection (SQL injection, hardcoded creds, insecure crypto, XSS), `effort=Max`, `threshold=Medium`, bound to `verify` phase. |
+| **SpotBugs Filter** | `config/spotbugs-exclude.xml` — excludes Lombok inner classes, MapStruct mapper impls, JPA/Spring proxy classes, test classes, DTO packages, controller return-value-ignored findings, and `@ConfigurationProperties` false positives. |
+| **OWASP Suppression** | `config/dependency-check-suppression.xml` — template for future false-positive suppressions. |
+| **Gitleaks Config** | `.gitleaks.toml` — allowlist for test `application.yaml` (fake JWT secret + DB password), `target/`, `.idea/`, `.mvn/`; custom rule override for test secret patterns. |
+| **Pre-commit Hook** | `.githooks/pre-commit` — runs `gitleaks detect --staged --redact` on staged files; blocks commit if secrets detected; gracefully skips if gitleaks not installed. |
+| **Pre-push Hook** | `.githooks/pre-push` — runs `mvn compile -q` then `mvn test -q`; blocks push on failure; bypassable via `SKIP_PUSH_HOOKS=1` env var. |
+| **Hooks Setup Script** | `.githooks/setup.sh` — one-command git hooks activation (`git config core.hooksPath .githooks`), idempotent. |
+| **GitHub Actions CI** | `.github/workflows/ci.yml` — 4 parallel jobs: (1) Build & Test (PR + main), (2) Gitleaks secret scan with full history (PR + main), (3) OWASP Dependency-Check with NVD caching (main only), (4) SpotBugs/FindSecBugs (main only). Test reports uploaded as artifacts. |
+| **Dependabot** | `.github/dependabot.yml` — weekly Maven dependency update PRs (Monday), monthly GitHub Actions dependency update PRs. |
+| **Documentation** | `AGENTS.md` updated with CI/CD & Security section covering hooks setup, Maven analysis commands, CI workflow overview, and Dependabot. |
+
+**Environment-based behavior:**
+
+| Trigger | Build & Test | Gitleaks | OWASP | SpotBugs |
+|---------|-------------|----------|-------|----------|
+| PR to main | ✅ | ✅ | ❌ | ❌ |
+| Push to main | ✅ | ✅ | ✅ | ✅ |
+| Dependabot PR | ✅ | ✅ | ❌ | ❌ |
+
+**Tools installed:**
+- OWASP Dependency-Check: `mvn dependency-check:check`
+- SpotBugs + FindSecBugs: `mvn spotbugs:spotbugs`
+- Gitleaks: `gitleaks detect --config .gitleaks.toml`
+- Git hooks: `bash .githooks/setup.sh`
+
+**Files created/modified:**
+- `pom.xml` — added OWASP + SpotBugs/FindSecBugs plugins
+- `config/spotbugs-exclude.xml` — SpotBugs exclude filter
+- `config/dependency-check-suppression.xml` — OWASP suppression template
+- `.gitleaks.toml` — Gitleaks configuration
+- `.githooks/pre-commit` — secret detection hook
+- `.githooks/pre-push` — compile + test gate hook
+- `.githooks/setup.sh` — hooks activation helper
+- `.github/workflows/ci.yml` — CI pipeline
+- `.github/dependabot.yml` — dependency updates
+- `AGENTS.md` — documentation updates
+
+---
+
 ### Phase 12: REST Documentation & Final Integration — ⬜ NOT STARTED
 
 **Goal:** Generate API documentation and verify end-to-end flows.
@@ -427,6 +474,7 @@ Phase 1 (Foundation)
 
 Phase 6 (Code Review Fixes) — applied across Phases 1–4
 Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
+Phase 13 (CI/CD, Git Hooks & Static Analysis) — independent, no code dependencies
 Phase 12 (Docs & Integration)
 ```
 
@@ -471,6 +519,7 @@ Phase 12 (Docs & Integration)
 | Phase 10: Code Review Round 2 | ✅ Complete | 12 passing |
 | Phase 11: Reports Domain | ✅ Complete | 31 passing |
 | Phase 12: Docs & Integration | ⬜ Not Started | — |
+| Phase 13: CI/CD, Git Hooks & Static Analysis | ✅ Complete | — |
 | **Total** | | **227 passing (+2 skipped)** |
 
 ---

@@ -1,0 +1,25 @@
+# Gitleaks configuration for financetracker
+# https://github.com/gitleaks/gitleaks
+
+# Allow list — paths or rules to skip during scanning
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    # Test configuration contains fake JWT secret and DB password
+    '''src/test/resources/application\.yaml''',
+    # Build output
+    '''target/''',
+    # IDE files
+    '''\.idea/''',
+    # Maven wrapper
+    '''\.mvn/''',
+  ]
+
+# Custom rule overrides
+[[rules]]
+  id = "fake-test-secret"
+  description = "Allow fake secrets in test configuration"
+  regex = '''(?i)(secret|password|token)\s*[:=]\s*\S+'''
+  path = '''src/test/resources/.*'''
+  [rules.allowlist]
+    description = "Test config false positive"

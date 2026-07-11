@@ -26,6 +26,55 @@ mvn spring-boot:run                               # requires a running PostgreSQ
 - JPA with `@Id @GeneratedValue` on each entity (NOT on BaseEntity)
 - `@PrePersist` / `@PreUpdate` on BaseEntity for audit timestamps
 
+## CI/CD & Security
+
+### Git Hooks
+
+Local hooks catch issues before they reach CI. Set up once after cloning:
+
+```bash
+bash .githooks/setup.sh   # configures git core.hooksPath
+```
+
+| Hook | What it does | Bypass |
+|------|-------------|--------|
+| `pre-commit` | Gitleaks secret detection on staged files | `git commit --no-verify` |
+| `pre-push` | `mvn compile` + `mvn test` (blocks push on failure) | `git push --no-verify` or `SKIP_PUSH_HOOKS=1 git push` |
+
+**Prerequisites:** `gitleaks` (`brew install gitleaks` or `go install github.com/gitleaks/gitleaks/v8@latest`), Java 17 + Maven.
+
+### Maven Security Plugins
+
+| Plugin | Command | When it runs |
+|--------|---------|-------------|
+| OWASP Dependency-Check | `mvn dependency-check:check` | `verify` phase (CI main branch) |
+| SpotBugs + FindSecBugs | `mvn spotbugs:spotbugs` | `verify` phase (CI main branch) |
+
+- OWASP scans dependencies for known CVEs (fails on CVSS >= 7)
+- SpotBugs with FindSecBugs detects code-level vulnerabilities (SQL injection, hardcoded creds, insecure crypto, XSS)
+- Both are bound to `verify` phase — `mvn test` (local dev) skips them
+- Reports generated in `target/dependency-check/` and `target/spotbugsXml.xml`
+- Exclude filters in `config/spotbugs-exclude.xml`, suppressions in `config/dependency-check-suppression.xml`
+
+### GitHub Actions CI
+
+Workflow: `.github/workflows/ci.yml` — triggered on push to `main` and PRs.
+
+| Job | Runs on | What it does |
+|-----|---------|-------------|
+| Build & Test | PR + main | Compile + Surefire test reports |
+| Gitleaks | PR + main | Full-history secret scan (`fetch-depth: 0`) |
+| OWASP Scan | main only | Dependency CVE scan + report upload |
+| SpotBugs Scan | main only | Code vulnerability scan + report upload |
+
+**Environment-based behavior:** PRs get fast feedback (build + test + Gitleaks). Main pushes get full security scans (OWASP + SpotBugs).
+
+### Dependabot
+
+`.github/dependabot.yml` — automated dependency update PRs:
+- Maven dependencies: weekly (Monday)
+- GitHub Actions: monthly
+
 ## Architecture
 
 - **Package**: `com.marakicode.financetracker`

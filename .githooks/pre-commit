@@ -1,0 +1,34 @@
+#!/bin/sh
+#
+# pre-commit hook — Secret detection via Gitleaks
+#
+# Blocks commits that contain detected secrets (API keys, passwords, tokens).
+# Install gitleaks: https://github.com/gitleaks/gitleaks#installation
+#
+# Skip: git commit --no-verify
+#
+
+set -e
+
+# Check if gitleaks is installed
+if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "⚠  gitleaks not installed — skipping secret scan."
+    echo "   Install: https://github.com/gitleaks/gitleaks#installation"
+    exit 0
+fi
+
+echo "🔍 Running Gitleaks secret scan on staged files..."
+
+# --staged: only scan staged changes
+# --redact: mask detected secrets in output
+# --verbose: show progress
+if gitleaks detect --staged --redact --verbose 2>&1; then
+    echo "✅ No secrets detected."
+    exit 0
+else
+    echo ""
+    echo "❌ Secret detected in staged files!"
+    echo "   Review the output above and remove the secret."
+    echo "   To bypass (NOT recommended): git commit --no-verify"
+    exit 1
+fi

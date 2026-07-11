@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SpotBugs exclude filter for financetracker.
+    Excludes Lombok-generated code, MapStruct mapper implementations,
+    test classes, DTOs, and Spring proxy classes.
+-->
+<FindBugsFilter>
+    <!-- Lombok-generated inner classes (delegates, builders, etc.) -->
+    <Match>
+        <Class name="~.*_\$\w+" />
+    </Match>
+
+    <!-- Lombok @Generated annotation marker -->
+    <Match>
+        <Annotations>
+            <Annotation name="lombok.Generated" />
+        </Annotations>
+    </Match>
+
+    <!-- MapStruct-generated mapper implementations -->
+    <Match>
+        <Class name="~.*MapperImpl$" />
+    </Match>
+
+    <!-- JPA proxy classes and Hibernate enhancers -->
+    <Match>
+        <Or>
+            <Class name="~.*\$\$_*" />
+            <Class name="~.*HibernateProxy*" />
+        </Or>
+    </Match>
+
+    <!-- Spring proxy classes -->
+    <Match>
+        <Class name="~.*SpringCGLIB\$\$*" />
+    </Match>
+
+    <!-- Spring Security proxy classes -->
+    <Match>
+        <Class name="~.*\$\$SpringProxy*" />
+    </Match>
+
+    <!-- Test classes -->
+    <Match>
+        <Or>
+            <Class name="~.*Test$" />
+            <Class name="~.*Tests$" />
+            <Class name="~.*Test\$.*" />
+        </Or>
+    </Match>
+
+    <!-- Skip low-value findings on controllers (return value ignored) -->
+    <Match>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT" />
+        <Class name="~.*Controller" />
+    </Match>
+
+    <!-- Skip MS_SHOULD_BE_FINAL on Spring @Value/@ConfigurationProperties fields -->
+    <Match>
+        <Bug pattern="MS_SHOULD_BE_FINAL" />
+        <Class name="~.*Properties$" />
+    </Match>
+</FindBugsFilter>

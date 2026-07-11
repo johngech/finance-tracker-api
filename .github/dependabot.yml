@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Maven dependencies — check weekly
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+    open-pull-requests-limit: 10
+
+  # GitHub Actions — check monthly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - ci
+    open-pull-requests-limit: 5
