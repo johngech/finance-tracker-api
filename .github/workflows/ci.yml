@@ -48,6 +48,9 @@ jobs:
   gitleaks:
     name: Gitleaks Secret Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout (full history)
         uses: actions/checkout@v6
@@ -57,7 +60,7 @@ jobs:
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
-          GITLEAKS_LICENSE: ""
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ─────────────────────────────────────────────
   # OWASP Dependency-Check — CVE scan (main only)
@@ -77,12 +80,13 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: Cache OWASP NVD database
-        uses: actions/cache@v4
+      - name: Cache OWASP Dependency-Check NVD database
+        uses: actions/cache@v6
         with:
           path: ~/.dependency-check/data
-          key: owasp-nvd-${{ hashFiles('pom.xml') }}
-          restore-keys: owasp-nvd-
+          key: owasp-nvd-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            owasp-nvd-${{ runner.os }}-
 
       - name: Run OWASP Dependency-Check
         run: mvn dependency-check:check -q
