@@ -1,0 +1,41 @@
+# ===========================================================================
+# Stag profile — pre-production testing
+# ===========================================================================
+# Activate:  export SPRING_PROFILES_ACTIVE=stag
+#
+# ALL secrets are required via environment variables.
+# The application will FAIL TO START if any are missing.
+# ===========================================================================
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jwt:
+    secret: ${JWT_SECRET}
+
+app:
+  cors:
+    allowed-origin-patterns: ${CORS_ORIGIN}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+server:
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/plain,application/javascript
+
+logging:
+  level:
+    com.marakicode.financetracker: INFO
+    root: WARN

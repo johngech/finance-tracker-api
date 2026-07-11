@@ -21,7 +21,7 @@ spring:
 app:
   cors:
     allowed-origin-patterns: http://localhost:3000
-    allowed-methods: GET,POST,PATCH,DELETE,OPTIONS
+    allowed-methods: GET,POST,PATCH,PUT,DELETE,HEAD,OPTIONS
     allowed-headers: Content-Type,Authorization,X-Requested-With
     allow-credentials: true
     max-age: 3600

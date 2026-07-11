@@ -1,32 +1,41 @@
+# ===========================================================================
+# Shared configuration — inherited by ALL Spring profiles
+# ===========================================================================
+# Activate a profile via env var or JVM arg:
+#   export SPRING_PROFILES_ACTIVE=dev
+#   java -Dspring.profiles.active=prod -jar app.jar
+#
+# Environment-specific values (datasource, JWT secret, CORS origins) are
+# defined in application-{profile}.yaml and MUST NOT appear here.
+# ===========================================================================
+
 spring:
   application:
     name: financetracker
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/financetracker
-    username: postgres
-    password: MyP@ssword!123
-    driver-class-name: org.postgresql.Driver
-
   jpa:
-    show-sql: true
+    show-sql: false
     hibernate:
       ddl-auto: validate
 
   flyway:
     enabled: true
     locations: classpath:db/migration
-    baseline-on-migrate: true
+    baseline-on-migrate: false
 
   jwt:
-    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
     access-token-expiration: 900000
     refresh-token-expiration: 604800000
 
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  port: 8080
+
 app:
   cors:
-    allowed-origin-patterns: http://localhost:3000
-    allowed-methods: GET,POST,PATCH,DELETE,OPTIONS
+    allowed-methods: GET,POST,PATCH,PUT,DELETE,HEAD,OPTIONS
     allowed-headers: Content-Type,Authorization,X-Requested-With
     allow-credentials: true
     max-age: 3600
