@@ -4,7 +4,7 @@
 
 - **Project:** `com.marakicode.financetracker` — Spring Boot 3.5.0 / Java 17 / Maven monolith
 - **Architecture:** PostgreSQL + Flyway + JPA + Lombok + MapStruct + Spring Security 6.5.0 + REST Docs, DDD-style package layout
-- **Current State:** Foundation, User Management, Auth/JWT, and Accounts are complete. Code review fixes and enum error handling are done. JWT-based stateless authentication with login, register, refresh, and profile endpoints is fully implemented. Ownership-based authorization via `UserIdPrincipal` and `@PreAuthorize` is enforced on all user and account endpoints. 128 tests passing.
+- **Current State:** Foundation, User Management, Auth/JWT, Accounts, Transactions, Code Review Fixes (Rounds 1 & 2), Enum Error Handling, and 3NF Refactoring are all complete. JWT-based stateless authentication with login, register, refresh, and profile endpoints is fully implemented. Ownership-based authorization via `UserIdPrincipal` and `@PreAuthorize` is enforced on all domain endpoints. Transaction type and category are normalized to 3NF reference tables (Flyway V6/V7). `SecurityUtils` provides shared current-user resolution. 194 tests passing, 2 skipped.
 - **Target State:** Fully functional finance tracker with JWT auth, CRUD for users/accounts/transactions, financial reporting, pagination, validation, and REST documentation.
 
 ---
@@ -18,7 +18,7 @@
 | R3 | Security skeleton with modular per-domain rules | `auth/` | High | ✅ Done |
 | R4 | JWT authentication (login, register, refresh tokens) | `auth/` | High | ✅ Done |
 | R5 | Account management CRUD (bank/investment accounts) | `accounts/` | High | ✅ Done |
-| R6 | Transaction management CRUD (financial transactions linked to accounts) | `transactions/` | High | ⬜ Not started |
+| R6 | Transaction management CRUD (financial transactions linked to accounts) | `transactions/` | High | ✅ Done |
 | R7 | Financial reporting (summaries by category and time period) | `transactions/` | Medium | ⬜ Not started |
 | R8 | Data validation (positive amounts, transaction types) | Service Layer | Medium | ⬜ Not started |
 | R9 | Pagination for list endpoints | Controller + Service | Medium | ✅ Done |
@@ -40,7 +40,7 @@ Each domain is a self-contained bounded context with its own controller, service
 ```
 com.marakicode.financetracker/
   common/              # Shared foundation: base entities, API wrappers, exception handling,
-                       # constants, SearchUtils, EmailNormalizer
+                       # constants, SearchUtils, EmailNormalizer, SecurityUtils
   auth/                # Security config, JWT auth (JwtConfig, JwtService, Jwt,
                        # JwtAuthenticationFilter, UserIdPrincipal, AuthController,
                        # AuthService, AuthSecurityRules, UserDetailsServiceImpl)
@@ -49,7 +49,10 @@ com.marakicode.financetracker/
   accounts/            # Account domain: entity, CRUD, ownership enforcement, filtering
   accounts/dto/        # AccountCreateRequest, AccountResponse, CurrencyUpdateRequest,
                        # UpdateAccountTypeRequest
-  transactions/        # (planned) Transaction domain
+  transactions/        # Transaction domain: entity, CRUD, balance management, ownership
+                       # enforcement, dynamic filtering, 3NF type/category reference tables
+  transactions/dto/    # TransactionCreateRequest, TransactionUpdateRequest,
+                       # TransactionResponse
 ```
 
 ### Key Design Patterns
@@ -66,6 +69,8 @@ com.marakicode.financetracker/
 | **Flyway Migrations** | One migration per schema change, never edit an applied migration. Migrations are versioned sequentially (V1, V2, V3...). |
 | **Case-Insensitive Email** | Emails normalized to lowercase before persistence. Database enforces uniqueness via a `LOWER()` function index. |
 | **JPA Specifications** | Dynamic filtering via `Specification` for search and filter parameters on list endpoints. `SearchUtils` escapes LIKE wildcards to prevent injection. |
+| **SecurityUtils** | Static utility in `common/` that resolves the current authenticated user from `SecurityContextHolder`. Guards against null/blank auth, throws `AccessDeniedException`. Shared by `TransactionService` and `AccountService` — eliminates duplicate current-user resolution logic. |
+| **3NF Reference Tables** | Transaction type and category are normalized into reference tables (`transaction_types`, `transaction_categories`) with FK constraints. Service layer uses find-or-create for dynamic categories (`insertIfAbsent` + `findByName`). Mapper uses `@Named` converters to translate entities to DTOs. Specifications JOIN reference tables for filtering. |
 
 ### API Response Convention
 
@@ -212,26 +217,35 @@ com.marakicode.financetracker/
 
 ---
 
-### Phase 5: Transaction Management — ⬜ NOT STARTED
+### Phase 5: Transaction Management — ✅ DONE
 
-**Goal:** CRUD for financial transactions linked to accounts, with balance updates and reporting.
+**Goal:** CRUD for financial transactions linked to accounts, with balance updates and filtering.
 
-**Planned functionality:**
+**What was delivered:**
 
 | Functionality | Description |
 |---------------|-------------|
-| **Create Transaction** | POST endpoint. Validates amount (positive), type (income/expense/transfer), category, and date. Updates account balance. |
-| **Get Transaction by ID** | Returns transaction details. Ownership verification via account. |
-| **List Account Transactions** | Paginated list for a specific account. |
-| **Transaction Reports** | Summary by category and date range. Computed from transaction data (no separate report entity). |
+| **Create Transaction** | POST endpoint (authenticated). Validates amount (`@DecimalMin("0.01")`), type (INCOME/EXPENSE), category, and date (`@PastOrPresent`). Updates account balance — INCOME adds, EXPENSE subtracts. Throws `InsufficientFundsException` on insufficient funds. |
+| **Get Transaction by ID** | GET endpoint (authenticated). Returns transaction details. Ownership verification via account ownership. |
+| **List Transactions** | Paginated list (authenticated). Dynamic filtering via JPA Specifications: filter by accountId, type, category, description search, and date range. |
+| **Update Transaction** | PATCH endpoint (authenticated). Partial update — only mutable fields (description, amount, category, date). Empty body returns existing transaction unchanged (no-op). Balance only adjusted when type or amount actually changed. Account assignment immutable after creation. |
+| **Delete Transaction** | DELETE endpoint (authenticated). Removes transaction, reverses balance effect, returns 204. Ownership verification via account. |
+
+**Database:**
+- `transactions` table with `account_id` FK, type, amount, description, transaction_date, category
+- `@NamedEntityGraph("Transaction.withAccount")` to prevent N+1 queries
+
+**Security:**
+- All transaction operations enforce ownership via account ownership — users can only access transactions on their own accounts
+- `TransactionSecurityRules` component implementing `SecurityRules`
 
 **Architecture:**
-- `transactions/` package with entity, repository, service, controller, DTOs
-- `Transaction` entity with `@ManyToOne` to `Account`
-- Transaction type enforced via enum (INCOME, EXPENSE, TRANSFER)
-- Balance updates are transactional — atomic read-modify-write on account balance
-- Reports are computed queries, not stored data (YAGNI)
-- Flyway migration with foreign key to accounts table
+- `TransactionMapper` (MapStruct) for entity ↔ DTO mapping with explicit nested path `@Mapping` annotations
+- `TransactionSpecification` — dynamic JPA Specifications for filtering
+- `InsufficientFundsException` handled in `TransactionController` with 400 Bad Request
+- Empty PATCH body handling: all-null update fields return existing transaction unchanged
+
+**Test coverage:** 56 tests (12 repo + 25 service + 19 controller)
 
 ---
 
@@ -286,7 +300,60 @@ com.marakicode.financetracker/
 
 ---
 
-### Phase 8: REST Documentation & Final Integration — ⬜ NOT STARTED
+### Phase 8: Transaction Type & Category 3NF Refactoring — ✅ DONE
+
+**Goal:** Normalize transaction type and category from flat strings/enums to proper 3NF reference tables.
+
+**What was delivered:**
+
+| Category | Change |
+|----------|--------|
+| **DB** | Flyway V6 creates `transaction_types` and `transaction_categories` reference tables, seeds INCOME/EXPENSE types, migrates existing category data, adds FK constraints. Flyway V7 adds indexes on FK columns and cleans up whitespace-only categories. |
+| **Entity** | `Transaction.type` changed from `@Enumerated(EnumType.STRING)` to `@ManyToOne(LAZY)` → `TransactionTypeEntity`. `Transaction.category` changed from free-text `String` to `@ManyToOne(LAZY)` → `TransactionCategoryEntity`. |
+| **Reference Tables** | `TransactionTypeEntity` + `TransactionTypeRepository` (fixed: INCOME, EXPENSE). `TransactionCategoryEntity` + `TransactionCategoryRepository` (dynamic: find-or-create on first use). |
+| **Mapper** | `TransactionMapper` ignores `type`/`category` in `toEntity`/`updateEntity`. Adds `@Named("toEnum")` and `@Named("toCategoryName")` converters for `toResponse`. |
+| **Service** | `TransactionService` injects `TransactionTypeRepository` and `TransactionCategoryRepository`. `resolveType()` looks up type entity. `resolveCategory()` does find-or-create. `toTransactionType()` converts entity to enum for balance logic. |
+| **Specifications** | `TransactionSpecification.typeEquals()` and `categoryEquals()` join reference tables via `root.join("type")` / `root.join("category")` and compare on `name` field. |
+| **Entity Graph** | `Transaction.withAccount` now includes `type` and `category` attribute nodes to prevent N+1. |
+| **API Contract** | Unchanged — DTOs still accept `TransactionType` enum and `String category`; response still returns enum type and string category. |
+
+---
+
+### Phase 9: Code Review Round 1 — ✅ DONE
+
+**Goal:** Address race conditions, performance indexes, balance guard logic, DRY violations, and defensive coding.
+
+**What was delivered:**
+
+| Category | Fix |
+|----------|-----|
+| **P1 — Race condition** | `TransactionCategoryRepository.insertIfAbsent()` uses native `INSERT ... ON CONFLICT DO NOTHING`. `TransactionService.resolveCategory()` calls `insertIfAbsent` then `findByName` — atomic and safe under concurrency. |
+| **P1 — FK indexes** | Flyway V7 adds `idx_transactions_type` and `idx_transactions_category` on FK columns for efficient Specification JOINs; also cleans up whitespace-only categories. |
+| **P2 — Balance guard** | `TransactionService.updateTransaction()` only reverses/applies balance when `type` or `amount` actually changed — prevents transient incorrect balance on metadata-only updates and eliminates unnecessary `accountRepository.save()`. |
+| **P2 — Method length** | Extracted `buildTransaction()` private method from `createTransaction()` to stay within 10-line limit. |
+| **P2 — DRY** | Extracted `getCurrentUser()` to `common/SecurityUtils.getCurrentUser(UserService)` — shared by `TransactionService` and `AccountService`. |
+| **P3 — Auth exception** | `SecurityUtils.getCurrentUser()` throws `AccessDeniedException("Not authenticated")` instead of misusing `ResourceNotFoundException`. |
+| **Tests** | 8 new tests covering null category, invalid type, balance skip on metadata-only update, combined specification filters, validation errors, and empty PATCH body. |
+
+---
+
+### Phase 10: Code Review Round 2 — ✅ DONE
+
+**Goal:** Fix migration safety, extract long methods, harden defensive coding, and improve test strictness.
+
+**What was delivered:**
+
+| Category | Fix |
+|----------|-----|
+| **P1 — Migration safety** | V7 now nulls out `transactions.category` before deleting whitespace-only `transaction_categories` rows — prevents FK constraint violation. |
+| **P2 — Method length** | Extracted `reconcileBalanceIfNeeded()` private method (balance comparison + reverse/check/apply) from `updateTransaction()` — method now ≤10 lines. |
+| **P2 — Defensive coding** | `SecurityUtils.getCurrentUser()` now guards against null/blank `auth.getName()` — throws `AccessDeniedException` instead of passing null/blank to `findByEmail()`. |
+| **P2 — Mock strictness** | Removed class-level `@MockitoSettings(strictness = Strictness.LENIENT)` from `TransactionServiceTest`; replaced with per-stub `lenient()` on `@BeforeEach` stubs only. |
+| **Tests** | `SecurityUtilsTest` (5 tests), `TransactionCategoryRepositoryTest` (3 tests, 2 skipped — native ON CONFLICT requires PostgreSQL), 4 new service tests (balance adjustment, category persistence, category creation failure, null category delete). |
+
+---
+
+### Phase 11: REST Documentation & Final Integration — ⬜ NOT STARTED
 
 **Goal:** Generate API documentation and verify end-to-end flows.
 
@@ -308,7 +375,10 @@ Phase 1 (Foundation)
         ├── Phase 3 (Auth/JWT) — builds on user repository and security rules
         └── Phase 4 (Accounts) — FK to users table
               └── Phase 5 (Transactions) — FK to accounts table
-                    └── Phase 8 (Docs & Integration)
+                    ├── Phase 8 (3NF Refactoring) — normalizes type/category to reference tables
+                    ├── Phase 9 (Code Review Round 1) — race conditions, indexes, DRY, balance guard
+                    ├── Phase 10 (Code Review Round 2) — migration safety, method extraction, defensive coding
+                    └── Phase 11 (Docs & Integration)
 
 Phase 6 (Code Review Fixes) — applied across Phases 1–4
 Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
@@ -334,7 +404,8 @@ Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
 | V3 | Users | Add role column, drop redundant UNIQUE constraint on email |
 | V4 | Accounts | Accounts table with FK to users |
 | V5 | Accounts | Account types reference/lookup table |
-| V6 | Transactions | (planned) Transactions table with FK to accounts |
+| V6 | Transactions | Transaction types + categories reference tables with FK constraints |
+| V7 | Transactions | FK indexes on type/category + whitespace category cleanup |
 
 ---
 
@@ -344,13 +415,16 @@ Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
 |-------|--------|-------|
 | Phase 1: Foundation | ✅ Complete | — |
 | Phase 2: User Management | ✅ Complete | 25 passing |
-| Phase 3: Auth/JWT | ✅ Complete | 38 passing |
-| Phase 4: Accounts | ✅ Complete | 38 passing |
-| Phase 5: Transactions | ⬜ Not Started | — |
+| Phase 3: Auth/JWT | ✅ Complete | 36 passing |
+| Phase 4: Accounts | ✅ Complete | 32 passing |
+| Phase 5: Transactions | ✅ Complete | 56 passing |
 | Phase 6: Code Review Fixes | ✅ Complete | — |
 | Phase 7: Enum Error Handling | ✅ Complete | 4 passing |
-| Phase 8: Docs & Integration | ⬜ Not Started | — |
-| **Total** | | **130 passing** |
+| Phase 8: 3NF Refactoring | ✅ Complete | — |
+| Phase 9: Code Review Round 1 | ✅ Complete | 8 passing |
+| Phase 10: Code Review Round 2 | ✅ Complete | 12 passing |
+| Phase 11: Docs & Integration | ⬜ Not Started | — |
+| **Total** | | **194 passing (+2 skipped)** |
 
 ---
 
@@ -371,7 +445,12 @@ Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
 | `AccountRepositoryTest` | `@DataJpaTest` | 8 |
 | `AccountControllerTest` | `@WebMvcTest` (mocked service) | 18 |
 | `AccountServiceTest` | `@ExtendWith(MockitoExtension.class)` | 14 |
-| **Total** | | **130** |
+| `TransactionRepositoryTest` | `@DataJpaTest` | 12 |
+| `TransactionServiceTest` | `@ExtendWith(MockitoExtension.class)` | 25 |
+| `TransactionControllerTest` | `@WebMvcTest` (mocked service) | 19 |
+| `TransactionCategoryRepositoryTest` | `@DataJpaTest` | 3 (+2 skipped) |
+| `SecurityUtilsTest` | `@ExtendWith(MockitoExtension.class)` | 5 |
+| **Total** | | **194 (+2 skipped)** |
 
 ---
 
@@ -408,3 +487,13 @@ Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
 | PATCH | `/api/v1/accounts/{id}` | authenticated (owner) | Update account currency |
 | PATCH | `/api/v1/accounts/{id}/type` | ADMIN | Update account type |
 | DELETE | `/api/v1/accounts/{id}` | authenticated (owner) | Delete account |
+
+### Transaction Domain
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/transactions` | authenticated | Create transaction |
+| GET | `/api/v1/transactions/{id}` | authenticated (owner via account) | Get transaction by ID |
+| GET | `/api/v1/transactions` | authenticated | List transactions (paginated, filterable) |
+| PATCH | `/api/v1/transactions/{id}` | authenticated (owner via account) | Update transaction (partial) |
+| DELETE | `/api/v1/transactions/{id}` | authenticated (owner via account) | Delete transaction |

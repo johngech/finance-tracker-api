@@ -30,7 +30,7 @@ mvn spring-boot:run                               # requires a running PostgreSQ
 
 - **Package**: `com.marakicode.financetracker`
 - **Entrypoint**: `FinancetrackerApplication.java`
-- **DB migrations**: Flyway SQL in `src/main/resources/db/migration/` (`V1__*.sql`, `V2__*.sql`, `V3__*.sql`)
+- **DB migrations**: Flyway SQL in `src/main/resources/db/migration/` (`V1__*.sql` through `V7__*.sql`)
 - **REST Docs**: tests use `@AutoConfigureRestDocs` + `MockMvc`; AsciiDoc in `src/main/asciidoc/`
 - **Test config**: `src/test/resources/application.yaml` (H2 in-memory, Flyway disabled)
 
@@ -41,7 +41,7 @@ com.marakicode.financetracker/
   common/              # ApiResponse, PagedResponse, BaseEntity, GlobalExceptionHandler,
                        # ErrorDto, ResourceNotFoundException, DuplicateResourceException,
                        # ValidationConstants, SecurityRules (functional interface),
-                       # EmailNormalizer, SearchUtils
+                       # EmailNormalizer, SearchUtils, SecurityUtils
   auth/                # SecurityConfig, CorsProperties, JwtConfig, JwtService, Jwt,
                        # JwtAuthenticationFilter, UserIdPrincipal, UserDetailsServiceImpl,
                        # AuthService, AuthController, AuthSecurityRules, JwtResponse,
@@ -55,7 +55,14 @@ com.marakicode.financetracker/
                        # AccountType (enum), AccountTypeEntity, AccountTypeRepository
   accounts/dto/        # AccountCreateRequest, AccountResponse, CurrencyUpdateRequest,
                        # UpdateAccountTypeRequest
-  transactions/        # (planned)
+  transactions/        # Transaction, TransactionType (enum), TransactionTypeEntity,
+                       # TransactionTypeRepository, TransactionCategoryEntity,
+                       # TransactionCategoryRepository, TransactionRepository,
+                       # TransactionMapper, TransactionService, TransactionController,
+                       # TransactionSecurityRules, InsufficientFundsException,
+                       # TransactionSpecification
+  transactions/dto/    # TransactionCreateRequest, TransactionUpdateRequest,
+                       # TransactionResponse
 ```
 
 Each domain package is self-contained with a controller at the domain root. Only create `entity/`, `repository/`, `dto/`, `service/` sub-packages when a domain has **more than 2 files** of that type — otherwise, files sit flat at the domain root.
@@ -96,6 +103,7 @@ Each domain package is self-contained with a controller at the domain root. Only
 - `DuplicateResourceException` → 409 via `GlobalExceptionHandler`
 - `MethodArgumentNotValidException` → 400 with field errors
 - `PasswordMismatchException` → 400 via `UserController` handler
+- `InsufficientFundsException` → 400 via `TransactionController` handler
 - `HttpRequestMethodNotSupportedException` → 405 via `GlobalExceptionHandler`
 - `HttpMessageNotReadableException` → 400 via `GlobalExceptionHandler` (enum deserialization errors return valid values in message)
 - `MethodArgumentTypeMismatchException` → 400 via `GlobalExceptionHandler`
@@ -112,8 +120,9 @@ Each domain package is self-contained with a controller at the domain root. Only
 - MapStruct for entity ↔ DTO mapping (avoid manual `from()` factories)
 - `@RequiredArgsConstructor` on services (Lombok); `@AllArgsConstructor` on controllers with single dependency (Lombok)
 - `@Transactional` on write methods, `@Transactional(readOnly = true)` on read methods
+- Mockito strict mode: per-stub `lenient()` on `@BeforeEach` stubs only (NOT class-level `@MockitoSettings(strictness = Strictness.LENIENT)`)
 
-## Test inventory (130 tests)
+## Test inventory (194 tests, 2 skipped)
 
 | Test class | Type | Count |
 |---|---|---|
@@ -130,6 +139,11 @@ Each domain package is self-contained with a controller at the domain root. Only
 | `AccountRepositoryTest` | `@DataJpaTest` | 8 |
 | `AccountControllerTest` | `@WebMvcTest` (mocked service) | 18 |
 | `AccountServiceTest` | `@ExtendWith(MockitoExtension.class)` | 14 |
+| `TransactionRepositoryTest` | `@DataJpaTest` | 12 |
+| `TransactionServiceTest` | `@ExtendWith(MockitoExtension.class)` | 25 |
+| `TransactionControllerTest` | `@WebMvcTest` (mocked service) | 19 |
+| `TransactionCategoryRepositoryTest` | `@DataJpaTest` | 3 (+2 skipped) |
+| `SecurityUtilsTest` | `@ExtendWith(MockitoExtension.class)` | 5 |
 
 ## User domain endpoints
 
@@ -151,6 +165,16 @@ Each domain package is self-contained with a controller at the domain root. Only
 | POST | `/api/v1/auth/refresh` | permitAll | Refresh access token using refresh token |
 | GET | `/api/v1/auth/me` | authenticated | Get current authenticated user profile |
 | POST | `/api/v1/auth/logout` | authenticated | Clear refresh token cookie and security context |
+
+## Transactions domain endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/transactions` | authenticated | Create transaction |
+| GET | `/api/v1/transactions/{id}` | authenticated | Get transaction by ID |
+| GET | `/api/v1/transactions` | authenticated | List transactions (paginated, filterable) |
+| PATCH | `/api/v1/transactions/{id}` | authenticated | Update transaction (partial) |
+| DELETE | `/api/v1/transactions/{id}` | authenticated | Delete transaction |
 
 ## Implementation status
 
@@ -197,7 +221,20 @@ Each domain package is self-contained with a controller at the domain root. Only
 - `SearchUtils` for LIKE wildcard escaping (prevents LIKE injection)
 - `AccountCreateRequest` name validation: 3-20 chars, alphanumeric only
 
-### Phase 5: Transactions — NOT STARTED
+### Phase 5: Transactions — DONE
+- Transaction entity with ownership (account_id FK), type (INCOME/EXPENSE), amount, description, transactionDate, category
+- AccountTypeEntity — reference/lookup table for CHECKING, SAVINGS, INVESTMENT
+- Full CRUD: create, read (by ID + paginated list), update (partial PATCH), delete (returns 204)
+- Ownership enforcement: all transaction operations filter by authenticated user via account ownership
+- Balance management: INCOME adds to account balance, EXPENSE subtracts; insufficient funds throws `InsufficientFundsException`
+- Dynamic filtering: filter by accountId, type, category, description search, date range via JPA Specifications
+- MapStruct TransactionMapper for entity ↔ DTO mapping with explicit nested path `@Mapping` annotations
+- `@NamedEntityGraph("Transaction.withAccount")` to prevent N+1 queries
+- Empty PATCH body handling: all-null update fields return existing transaction unchanged (no-op)
+- Account assignment immutable after creation (no accountId in update request)
+- `InsufficientFundsException` handled in controller with 400 Bad Request
+- `@DecimalMin("0.01")` on amount, `@PastOrPresent` on transactionDate validation
+- 44 new tests (10 repo + 18 service + 16 controller)
 ### Phase 6: Code Review Fixes — DONE
 - **Security**: JWT tokens now carry a `type` claim (`"access"`/`"refresh"`); access tokens cannot be used as refresh tokens
 - **Security**: `JwtConfig.secret` excluded from `toString()` via `@ToString.Exclude` to prevent log leakage
@@ -227,3 +264,31 @@ Each domain package is self-contained with a controller at the domain root. Only
 - Returns clear message: `"Invalid value 'X' for field 'type'. Allowed values are: CHECKING, SAVINGS, INVESTMENT"`
 - Works for any enum field in any request body (not just `AccountType`)
 - 4 new tests: invalid enum on `POST /accounts`, `PATCH /accounts/{id}/type`, lowercase enum, empty string enum
+
+### Phase 8: Transaction Type & Category 3NF Refactoring — DONE
+- **DB**: Flyway V6 creates `transaction_types` and `transaction_categories` reference tables, seeds INCOME/EXPENSE types, migrates existing category data, adds FK constraints on `transactions.type` → `transaction_types(name)` and `transactions.category` → `transaction_categories(name)`
+- **Entity**: `Transaction.type` changed from `@Enumerated(EnumType.STRING)` to `@ManyToOne(LAZY)` → `TransactionTypeEntity`; `Transaction.category` changed from free-text `String` to `@ManyToOne(LAZY)` → `TransactionCategoryEntity`
+- **Reference tables**: `TransactionTypeEntity` + `TransactionTypeRepository` (fixed: INCOME, EXPENSE); `TransactionCategoryEntity` + `TransactionCategoryRepository` (dynamic: find-or-create on first use)
+- **Mapper**: `TransactionMapper` now ignores `type`/`category` in `toEntity`/`updateEntity`; adds `@Named("toEnum")` (`TransactionTypeEntity` → `TransactionType` enum) and `@Named("toCategoryName")` (`TransactionCategoryEntity` → `String`) for `toResponse`
+- **Service**: `TransactionService` injects `TransactionTypeRepository` and `TransactionCategoryRepository`; `resolveType()` looks up type entity; `resolveCategory()` does find-or-create; `toTransactionType()` converts entity to enum for balance logic comparisons
+- **Specifications**: `TransactionSpecification.typeEquals()` and `categoryEquals()` now join reference tables via `root.join("type")` / `root.join("category")` and compare on `name` field
+- **Entity graph**: `Transaction.withAccount` now includes `type` and `category` attribute nodes to prevent N+1
+- **API contract unchanged**: DTOs still accept `TransactionType` enum and `String category`; response still returns enum type and string category
+
+### Phase 9: Code Review Fixes — DONE
+- **P1 — Race condition fix**: `TransactionCategoryRepository.insertIfAbsent()` uses native `INSERT ... ON CONFLICT DO NOTHING`; `TransactionService.resolveCategory()` calls `insertIfAbsent` then `findByName` — atomic and safe under concurrency
+- **P1 — FK indexes**: Flyway V7 adds `idx_transactions_type` and `idx_transactions_category` on FK columns for efficient Specification JOINs; also cleans up whitespace-only categories
+- **P2 — Balance guard**: `TransactionService.updateTransaction()` only reverses/applies balance when `type` or `amount` actually changed — prevents transient incorrect balance on metadata-only updates and eliminates unnecessary `accountRepository.save()`
+- **P2 — Method length**: Extracted `buildTransaction()` private method from `createTransaction()` to stay within 10-line limit
+- **P2 — DRY**: Extracted `getCurrentUser()` to `common/SecurityUtils.getCurrentUser(UserService)` — shared by `TransactionService` and `AccountService`; throws `AccessDeniedException` instead of `ResourceNotFoundException`
+- **P3 — Auth exception**: `SecurityUtils.getCurrentUser()` throws `AccessDeniedException("Not authenticated")` instead of misusing `ResourceNotFoundException`
+- **Tests — 8 new tests**: `createTransaction_nullCategory_succeeds`, `createTransaction_invalidType_throwsIllegalArgumentException`, `updateTransaction_onlyDescriptionUpdate_skipsBalanceMutation` (service); `findAll_withCombinedSpecifications_filtersByTypeAndCategoryAndDate`, `findAll_withCombinedSpecifications_filtersByAccountIdAndType` (repo); `updateTransaction_shouldReturn400_withDecimalMinViolation`, `updateTransaction_shouldReturn400_withFutureDate`, `updateTransaction_shouldReturn200_withEmptyBody` (controller)
+
+### Phase 10: Code Review Round 2 Fixes — DONE
+- **P1 — Migration safety**: V7 now nulls out `transactions.category` before deleting whitespace-only `transaction_categories` rows — prevents FK constraint violation
+- **P2 — `updateTransaction` method length**: Extracted `reconcileBalanceIfNeeded()` private method (balance comparison + reverse/check/apply) from `updateTransaction()` — method now ≤10 lines
+- **P2 — Defensive coding**: `SecurityUtils.getCurrentUser()` now guards against null/blank `auth.getName()` — throws `AccessDeniedException` instead of passing null/blank to `findByEmail()`
+- **P2 — Mock strictness**: Removed class-level `@MockitoSettings(strictness = Strictness.LENIENT)` from `TransactionServiceTest`; replaced with per-stub `lenient()` on `@BeforeEach` stubs only — Mockito strict mode now catches unused stubs at method level
+- **Tests — `SecurityUtilsTest` (5 tests)**: `getCurrentUser_validAuth_returnsUser`, `getCurrentUser_nullAuth_throwsAccessDeniedException`, `getCurrentUser_blankName_throwsAccessDeniedException`, `getCurrentUser_nullName_throwsAccessDeniedException`, `getCurrentUser_realToken_returnsUser`
+- **Tests — `TransactionCategoryRepositoryTest` (3 tests, 2 skipped)**: `findByName_returnsCategory`, `findByName_returnsEmpty_whenNotExists`, `findByName_caseSensitive`; `insertIfAbsent` tests skipped with `@Disabled` (native `ON CONFLICT` requires PostgreSQL)
+- **Tests — 4 new service tests**: `updateTransaction_bothTypeAndAmountChange_adjustsBalance`, `createTransaction_newCategory_persistsCategory`, `createTransaction_categoryCreationFails_throwsIllegalStateException`, `deleteTransaction_nullCategory_succeeds`

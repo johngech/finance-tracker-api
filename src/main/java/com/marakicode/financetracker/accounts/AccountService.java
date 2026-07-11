@@ -7,12 +7,12 @@ import com.marakicode.financetracker.accounts.dto.UpdateAccountTypeRequest;
 import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
+import com.marakicode.financetracker.common.SecurityUtils;
 import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +30,7 @@ public class AccountService {
 
     @Transactional
     public AccountResponse createAccount(AccountCreateRequest request) {
-        User user = getCurrentUser();
+        User user = SecurityUtils.getCurrentUser(userService);
         validateUniqueName(user.getId(), request.name());
         Account account = accountMapper.toEntity(request);
         account.setUser(user);
@@ -47,14 +47,14 @@ public class AccountService {
 
     @Transactional(readOnly = true)
     public AccountResponse getAccountById(Long id) {
-        User user = getCurrentUser();
+        User user = SecurityUtils.getCurrentUser(userService);
         Account account = findOwnedAccount(id, user.getId());
         return accountMapper.toResponse(account);
     }
 
     @Transactional(readOnly = true)
     public PagedResponse<AccountResponse> getAccounts(String search, AccountType type, String currency, Pageable pageable) {
-        User user = getCurrentUser();
+        User user = SecurityUtils.getCurrentUser(userService);
 
         List<Specification<Account>> specs = new ArrayList<>();
         specs.add(AccountSpecification.userIdEquals(user.getId()));
@@ -79,7 +79,7 @@ public class AccountService {
 
     @Transactional
     public AccountResponse updateAccount(Long id, CurrencyUpdateRequest request) {
-        User user = getCurrentUser();
+        User user = SecurityUtils.getCurrentUser(userService);
         Account account = findOwnedAccount(id, user.getId());
         accountMapper.updateEntity(request, account);
         Account saved = accountRepository.save(account);
@@ -97,7 +97,7 @@ public class AccountService {
 
     @Transactional
     public void deleteAccount(Long id) {
-        User user = getCurrentUser();
+        User user = SecurityUtils.getCurrentUser(userService);
         Account account = findOwnedAccount(id, user.getId());
         accountRepository.delete(account);
     }
@@ -113,12 +113,4 @@ public class AccountService {
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + accountId));
     }
 
-    private User getCurrentUser() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) {
-            throw new ResourceNotFoundException("Not authenticated");
-        }
-        String email = auth.getName();
-        return userService.findByEmail(email);
-    }
 }
