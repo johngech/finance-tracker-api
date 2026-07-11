@@ -78,7 +78,7 @@ jobs:
           cache: maven
 
       - name: Cache OWASP NVD database
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.dependency-check/data
           key: owasp-nvd-${{ hashFiles('pom.xml') }}
