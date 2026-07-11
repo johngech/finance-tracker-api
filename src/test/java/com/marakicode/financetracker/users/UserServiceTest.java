@@ -2,6 +2,10 @@ package com.marakicode.financetracker.users;
 
 import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
+import com.marakicode.financetracker.users.dto.PasswordUpdateRequest;
+import com.marakicode.financetracker.users.dto.UserCreateRequest;
+import com.marakicode.financetracker.users.dto.UserDto;
+import com.marakicode.financetracker.users.dto.UserUpdateRequest;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -326,6 +330,6 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.deleteUser(999L))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("User not found");
-        verify(userRepository, never()).delete(any());
+        verify(userRepository, never()).delete(any(User.class));
     }
 }

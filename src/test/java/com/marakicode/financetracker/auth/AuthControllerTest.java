@@ -2,7 +2,7 @@ package com.marakicode.financetracker.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marakicode.financetracker.common.DuplicateResourceException;
-import com.marakicode.financetracker.users.UserDto;
+import com.marakicode.financetracker.users.dto.UserDto;
 import com.marakicode.financetracker.users.Role;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,4 +1,4 @@
-package com.marakicode.financetracker.users;
+package com.marakicode.financetracker.users.dto;
 
 import com.marakicode.financetracker.common.ValidationConstants;
 import jakarta.validation.constraints.*;

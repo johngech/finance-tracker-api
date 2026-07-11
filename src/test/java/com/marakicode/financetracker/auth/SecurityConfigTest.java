@@ -193,4 +193,80 @@ class SecurityConfigTest {
                 .andExpect(cookie().httpOnly("refreshToken", true))
                 .andExpect(cookie().path("refreshToken", "/api/v1/auth"));
     }
+
+    // ── Admin endpoint security (integration tests) ──────────────────
+
+    @Test
+    @DisplayName("GET /api/v1/admin/users should return 401 when unauthenticated")
+    void adminUsers_shouldReturn401_whenUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/users"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/users should return 403 when regular USER provides valid JWT")
+    void adminUsers_shouldReturn403_whenRegularUser() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + validBearerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/users should return 200 when ADMIN provides valid JWT")
+    void adminUsers_shouldReturn200_whenAdmin() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + adminBearerToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/accounts should return 401 when unauthenticated")
+    void adminAccounts_shouldReturn401_whenUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/accounts"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/accounts should return 403 when regular USER provides valid JWT")
+    void adminAccounts_shouldReturn403_whenRegularUser() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/accounts")
+                        .header("Authorization", "Bearer " + validBearerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/accounts should return 200 when ADMIN provides valid JWT")
+    void adminAccounts_shouldReturn200_whenAdmin() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/accounts")
+                        .header("Authorization", "Bearer " + adminBearerToken))
+                .andExpect(status().isOk());
+    }
+
+    // ── Admin dashboard endpoint security ──────────────────────────
+
+    @Test
+    @DisplayName("GET /api/v1/admin/dashboard should return 401 when unauthenticated")
+    void adminDashboard_shouldReturn401_whenUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/dashboard"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/dashboard should return 403 when regular USER provides valid JWT")
+    void adminDashboard_shouldReturn403_whenRegularUser() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/dashboard")
+                        .header("Authorization", "Bearer " + validBearerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/dashboard should return 200 when ADMIN provides valid JWT")
+    void adminDashboard_shouldReturn200_whenAdmin() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/dashboard")
+                        .header("Authorization", "Bearer " + adminBearerToken))
+                .andExpect(status().isOk());
+    }
 }

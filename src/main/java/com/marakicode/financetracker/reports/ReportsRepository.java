@@ -88,4 +88,68 @@ public interface ReportsRepository extends JpaRepository<Transaction, Long> {
             @Param("userId") Long userId,
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate);
+
+    /**
+     * System-wide summary: total income, total expense, and transaction count within a date range.
+     */
+    @Query("""
+        SELECT
+            COALESCE(SUM(CASE WHEN t.type.name = 'INCOME' THEN t.amount ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN t.type.name = 'EXPENSE' THEN t.amount ELSE 0 END), 0),
+            COUNT(t)
+        FROM Transaction t
+        WHERE (:fromDate IS NULL OR t.transactionDate >= :fromDate)
+            AND (:toDate IS NULL OR t.transactionDate <= :toDate)
+        """)
+    Object[] getSystemSummary(
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
+
+    /**
+     * System-wide category breakdown.
+     */
+    @Query("""
+        SELECT COALESCE(t.category.name, 'Uncategorized'), SUM(t.amount)
+        FROM Transaction t
+        WHERE (:type IS NULL OR t.type.name = :type)
+            AND (:fromDate IS NULL OR t.transactionDate >= :fromDate)
+            AND (:toDate IS NULL OR t.transactionDate <= :toDate)
+        GROUP BY t.category.name
+        ORDER BY SUM(t.amount) DESC
+        """)
+    List<Object[]> getSystemCategoryBreakdown(
+            @Param("type") String type,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
+
+    /**
+     * System-wide monthly breakdown for a given year.
+     */
+    @Query("""
+        SELECT MONTH(t.transactionDate),
+            COALESCE(SUM(CASE WHEN t.type.name = 'INCOME' THEN t.amount ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN t.type.name = 'EXPENSE' THEN t.amount ELSE 0 END), 0)
+        FROM Transaction t
+        WHERE YEAR(t.transactionDate) = :year
+        GROUP BY MONTH(t.transactionDate)
+        ORDER BY MONTH(t.transactionDate)
+        """)
+    List<Object[]> getSystemMonthlyBreakdown(@Param("year") int year);
+
+    /**
+     * System-wide account breakdown.
+     */
+    @Query("""
+        SELECT t.account.id, t.account.name,
+            COALESCE(SUM(CASE WHEN t.type.name = 'INCOME' THEN t.amount ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN t.type.name = 'EXPENSE' THEN t.amount ELSE 0 END), 0)
+        FROM Transaction t
+        WHERE (:fromDate IS NULL OR t.transactionDate >= :fromDate)
+            AND (:toDate IS NULL OR t.transactionDate <= :toDate)
+        GROUP BY t.account.id, t.account.name
+        ORDER BY t.account.name
+        """)
+    List<Object[]> getSystemAccountBreakdown(
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
 }

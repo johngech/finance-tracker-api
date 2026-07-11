@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.lang.Nullable;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 public interface AccountRepository extends JpaRepository<Account, Long>, JpaSpecificationExecutor<Account> {
@@ -26,6 +28,14 @@ public interface AccountRepository extends JpaRepository<Account, Long>, JpaSpec
     boolean existsByUserIdAndName(@Param("userId") Long userId, @Param("name") String name);
 
     @Override
-    @EntityGraph("Account.withType")
+    @EntityGraph("Account.withTypeAndUser")
     Page<Account> findAll(@Nullable Specification<Account> spec, Pageable pageable);
+
+    long countByFrozen(boolean frozen);
+
+    @Query("SELECT COALESCE(SUM(a.balance), 0) FROM Account a")
+    BigDecimal getTotalBalance();
+
+    @Query("SELECT a.type.name, COUNT(a) FROM Account a GROUP BY a.type.name")
+    List<Object[]> countByType();
 }

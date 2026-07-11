@@ -1,12 +1,10 @@
 package com.marakicode.financetracker.reports;
 
-import com.marakicode.financetracker.common.SecurityUtils;
 import com.marakicode.financetracker.reports.dto.AccountBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.CategoryBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.MonthlyBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.SummaryResponse;
 import com.marakicode.financetracker.transactions.TransactionType;
-import com.marakicode.financetracker.users.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,40 +14,37 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class ReportsService {
+public class ReportsFacadeImpl implements ReportsFacade {
 
     private final ReportsRepository reportsRepository;
-    private final UserService userService;
 
+    @Override
     @Transactional(readOnly = true)
-    public SummaryResponse getSummary(LocalDate from, LocalDate to) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        Object[] result = reportsRepository.getSummaryByUserId(user.getId(), from, to);
+    public SummaryResponse getSystemSummary(LocalDate from, LocalDate to) {
+        Object[] result = reportsRepository.getSystemSummary(from, to);
         return ReportsMapper.mapToSummary(result);
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public List<CategoryBreakdownResponse> getCategoryBreakdown(
+    public List<CategoryBreakdownResponse> getSystemCategoryBreakdown(
             TransactionType type, LocalDate from, LocalDate to) {
-        var user = SecurityUtils.getCurrentUser(userService);
         String typeName = type != null ? type.name() : null;
-        List<Object[]> results = reportsRepository.getCategoryBreakdown(
-                user.getId(), typeName, from, to);
+        List<Object[]> results = reportsRepository.getSystemCategoryBreakdown(typeName, from, to);
         return ReportsMapper.mapToCategoryBreakdown(results);
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public List<MonthlyBreakdownResponse> getMonthlyBreakdown(int year) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        List<Object[]> results = reportsRepository.getMonthlyBreakdown(user.getId(), year);
+    public List<MonthlyBreakdownResponse> getSystemMonthlyBreakdown(int year) {
+        List<Object[]> results = reportsRepository.getSystemMonthlyBreakdown(year);
         return ReportsMapper.mapToMonthlyBreakdown(results);
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public List<AccountBreakdownResponse> getAccountBreakdown(LocalDate from, LocalDate to) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        List<Object[]> results = reportsRepository.getAccountBreakdown(
-                user.getId(), from, to);
+    public List<AccountBreakdownResponse> getSystemAccountBreakdown(LocalDate from, LocalDate to) {
+        List<Object[]> results = reportsRepository.getSystemAccountBreakdown(from, to);
         return ReportsMapper.mapToAccountBreakdown(results);
     }
 }

@@ -13,9 +13,12 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "transactions")
 @NamedEntityGraph(name = "Transaction.withAccount", attributeNodes = {
-    @NamedAttributeNode("account"),
+    @NamedAttributeNode(value = "account", subgraph = "account.withUser"),
     @NamedAttributeNode("type"),
     @NamedAttributeNode("category")
+}, subgraphs = {
+    @NamedSubgraph(name = "account.withUser",
+        attributeNodes = @NamedAttributeNode("user"))
 })
 @Getter
 @Setter

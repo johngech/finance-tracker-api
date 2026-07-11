@@ -1,4 +1,4 @@
-package com.marakicode.financetracker.users;
+package com.marakicode.financetracker.users.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

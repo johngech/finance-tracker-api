@@ -1,5 +1,8 @@
 package com.marakicode.financetracker.users;
 
+import com.marakicode.financetracker.users.dto.UserCreateRequest;
+import com.marakicode.financetracker.users.dto.UserDto;
+import com.marakicode.financetracker.users.dto.UserUpdateRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;

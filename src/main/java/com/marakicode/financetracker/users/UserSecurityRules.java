@@ -11,7 +11,6 @@ public class UserSecurityRules implements SecurityRules {
     @Override
     public void configure(
             AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry registry) {
-        // No permitAll rules — all user endpoints require authentication.
-        // POST /api/v1/auth/register is the unauthenticated user creation path.
+        registry.requestMatchers("/api/v1/users/**").authenticated();
     }
 }

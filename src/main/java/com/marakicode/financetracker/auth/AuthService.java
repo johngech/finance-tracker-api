@@ -1,8 +1,8 @@
 package com.marakicode.financetracker.auth;
 
 import com.marakicode.financetracker.common.ResourceNotFoundException;
-import com.marakicode.financetracker.users.UserDto;
-import com.marakicode.financetracker.users.UserCreateRequest;
+import com.marakicode.financetracker.users.dto.UserDto;
+import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;

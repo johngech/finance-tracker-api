@@ -33,4 +33,7 @@ public class User extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
     private Role role = Role.USER;
+
+    @Column(nullable = false)
+    private boolean active = true;
 }

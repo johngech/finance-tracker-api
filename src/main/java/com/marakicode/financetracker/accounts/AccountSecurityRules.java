@@ -11,7 +11,6 @@ public class AccountSecurityRules implements SecurityRules {
     @Override
     public void configure(
             AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry registry) {
-        // All account endpoints require authentication.
-        // No permitAll rules — the catch-all in SecurityConfig handles it.
+        registry.requestMatchers("/api/v1/accounts/**").authenticated();
     }
 }

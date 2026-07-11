@@ -2,7 +2,7 @@ package com.marakicode.financetracker.auth;
 
 import com.marakicode.financetracker.common.ApiResponse;
 import com.marakicode.financetracker.common.ErrorDto;
-import com.marakicode.financetracker.users.UserDto;
+import com.marakicode.financetracker.users.dto.UserDto;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;

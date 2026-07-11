@@ -14,6 +14,10 @@ import java.math.BigDecimal;
     @UniqueConstraint(columnNames = {"user_id", "name"}, name = "uq_accounts_user_name")
 })
 @NamedEntityGraph(name = "Account.withType", attributeNodes = @NamedAttributeNode("type"))
+@NamedEntityGraph(name = "Account.withTypeAndUser", attributeNodes = {
+    @NamedAttributeNode("type"),
+    @NamedAttributeNode("user")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -39,4 +43,7 @@ public class Account extends BaseEntity {
 
     @Column(nullable = false, length = 3)
     private String currency;
+
+    @Column(nullable = false)
+    private boolean frozen = false;
 }
