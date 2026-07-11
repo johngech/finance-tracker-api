@@ -63,6 +63,10 @@ com.marakicode.financetracker/
                        # TransactionSpecification
   transactions/dto/    # TransactionCreateRequest, TransactionUpdateRequest,
                        # TransactionResponse
+  reports/               # ReportsController, ReportsService, ReportsRepository,
+                         # ReportsSecurityRules
+  reports/dto/           # SummaryResponse, CategoryBreakdownResponse,
+                         # MonthlyBreakdownResponse, AccountBreakdownResponse
 ```
 
 Each domain package is self-contained with a controller at the domain root. Only create `entity/`, `repository/`, `dto/`, `service/` sub-packages when a domain has **more than 2 files** of that type — otherwise, files sit flat at the domain root.
@@ -107,6 +111,7 @@ Each domain package is self-contained with a controller at the domain root. Only
 - `HttpRequestMethodNotSupportedException` → 405 via `GlobalExceptionHandler`
 - `HttpMessageNotReadableException` → 400 via `GlobalExceptionHandler` (enum deserialization errors return valid values in message)
 - `MethodArgumentTypeMismatchException` → 400 via `GlobalExceptionHandler`
+- `MissingServletRequestParameterException` → 400 via `GlobalExceptionHandler` (missing required query params like `year`)
 
 ## Conventions
 
@@ -122,7 +127,7 @@ Each domain package is self-contained with a controller at the domain root. Only
 - `@Transactional` on write methods, `@Transactional(readOnly = true)` on read methods
 - Mockito strict mode: per-stub `lenient()` on `@BeforeEach` stubs only (NOT class-level `@MockitoSettings(strictness = Strictness.LENIENT)`)
 
-## Test inventory (194 tests, 2 skipped)
+## Test inventory (227 tests, 2 skipped)
 
 | Test class | Type | Count |
 |---|---|---|
@@ -144,6 +149,9 @@ Each domain package is self-contained with a controller at the domain root. Only
 | `TransactionControllerTest` | `@WebMvcTest` (mocked service) | 19 |
 | `TransactionCategoryRepositoryTest` | `@DataJpaTest` | 3 (+2 skipped) |
 | `SecurityUtilsTest` | `@ExtendWith(MockitoExtension.class)` | 5 |
+| `ReportsRepositoryTest` | `@DataJpaTest` | 10 |
+| `ReportsServiceTest` | `@ExtendWith(MockitoExtension.class)` | 10 |
+| `ReportsControllerTest` | `@WebMvcTest` (mocked service) | 11 |
 
 ## User domain endpoints
 
@@ -175,6 +183,15 @@ Each domain package is self-contained with a controller at the domain root. Only
 | GET | `/api/v1/transactions` | authenticated | List transactions (paginated, filterable) |
 | PATCH | `/api/v1/transactions/{id}` | authenticated | Update transaction (partial) |
 | DELETE | `/api/v1/transactions/{id}` | authenticated | Delete transaction |
+
+## Reports domain endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/reports/summary` | authenticated | Income/Expense summary for a date range |
+| GET | `/api/v1/reports/by-category` | authenticated | Spending breakdown by category |
+| GET | `/api/v1/reports/monthly` | authenticated | Month-by-month income vs expense |
+| GET | `/api/v1/reports/by-account` | authenticated | Per-account income/expense breakdown |
 
 ## Implementation status
 
@@ -292,3 +309,17 @@ Each domain package is self-contained with a controller at the domain root. Only
 - **Tests — `SecurityUtilsTest` (5 tests)**: `getCurrentUser_validAuth_returnsUser`, `getCurrentUser_nullAuth_throwsAccessDeniedException`, `getCurrentUser_blankName_throwsAccessDeniedException`, `getCurrentUser_nullName_throwsAccessDeniedException`, `getCurrentUser_realToken_returnsUser`
 - **Tests — `TransactionCategoryRepositoryTest` (3 tests, 2 skipped)**: `findByName_returnsCategory`, `findByName_returnsEmpty_whenNotExists`, `findByName_caseSensitive`; `insertIfAbsent` tests skipped with `@Disabled` (native `ON CONFLICT` requires PostgreSQL)
 - **Tests — 4 new service tests**: `updateTransaction_bothTypeAndAmountChange_adjustsBalance`, `createTransaction_newCategory_persistsCategory`, `createTransaction_categoryCreationFails_throwsIllegalStateException`, `deleteTransaction_nullCategory_succeeds`
+
+### Phase 11: Reports Domain — DONE
+- **Read-only aggregation domain** — no new tables, no Flyway migration, no entities
+- `ReportsRepository` — 4 JPQL aggregate queries (SUM, COUNT, GROUP BY, CASE, COALESCE, MONTH/YEAR date functions)
+- `ReportsService` — orchestrates queries, maps `Object[]` → DTO records, computes category percentages
+- `ReportsController` — 4 GET endpoints at `/api/v1/reports/*` with date range validation
+- `ReportsSecurityRules` — authentication enforced via catch-all
+- `SummaryResponse` — totalIncome, totalExpense, netBalance, transactionCount
+- `CategoryBreakdownResponse` — category, totalAmount, percentage
+- `MonthlyBreakdownResponse` — month, income, expense
+- `AccountBreakdownResponse` — accountId, accountName, totalIncome, totalExpense, netAmount
+- `GlobalExceptionHandler` — added `MissingServletRequestParameterException` handler (400 for missing required params)
+- H2 compatibility: `ReportsRepositoryTest` uses `flattenResult()` helper for nested Object[] from H2 aggregates
+- 31 new tests (10 repo + 10 service + 11 controller)

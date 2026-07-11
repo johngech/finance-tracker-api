@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -136,6 +137,18 @@ public class GlobalExceptionHandler {
                         String.format("Parameter '%s' must be of type %s",
                                 ex.getName(), ex.getRequiredType() != null
                                         ? ex.getRequiredType().getSimpleName() : "unknown"),
+                        request.getRequestURI()));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorDto> handleMissingParameter(
+            MissingServletRequestParameterException ex, HttpServletRequest request) {
+        log.debug("Missing parameter on {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ErrorDto.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Bad Request",
+                        String.format("Required parameter '%s' is missing", ex.getParameterName()),
                         request.getRequestURI()));
     }
 

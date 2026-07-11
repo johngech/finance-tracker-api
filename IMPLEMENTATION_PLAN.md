@@ -4,7 +4,7 @@
 
 - **Project:** `com.marakicode.financetracker` — Spring Boot 3.5.0 / Java 17 / Maven monolith
 - **Architecture:** PostgreSQL + Flyway + JPA + Lombok + MapStruct + Spring Security 6.5.0 + REST Docs, DDD-style package layout
-- **Current State:** Foundation, User Management, Auth/JWT, Accounts, Transactions, Code Review Fixes (Rounds 1 & 2), Enum Error Handling, and 3NF Refactoring are all complete. JWT-based stateless authentication with login, register, refresh, and profile endpoints is fully implemented. Ownership-based authorization via `UserIdPrincipal` and `@PreAuthorize` is enforced on all domain endpoints. Transaction type and category are normalized to 3NF reference tables (Flyway V6/V7). `SecurityUtils` provides shared current-user resolution. 194 tests passing, 2 skipped.
+- **Current State:** Foundation, User Management, Auth/JWT, Accounts, Transactions, Code Review Fixes (Rounds 1 & 2), Enum Error Handling, 3NF Refactoring, and Reports Domain are all complete. JWT-based stateless authentication with login, register, refresh, and profile endpoints is fully implemented. Ownership-based authorization via `UserIdPrincipal` and `@PreAuthorize` is enforced on all domain endpoints. Transaction type and category are normalized to 3NF reference tables (Flyway V6/V7). `SecurityUtils` provides shared current-user resolution. Reports domain provides read-only JPQL aggregation queries (SUM, COUNT, GROUP BY, CASE, COALESCE, date functions) over existing transaction data — no new tables. 227 tests passing, 2 skipped.
 - **Target State:** Fully functional finance tracker with JWT auth, CRUD for users/accounts/transactions, financial reporting, pagination, validation, and REST documentation.
 
 ---
@@ -19,7 +19,7 @@
 | R4 | JWT authentication (login, register, refresh tokens) | `auth/` | High | ✅ Done |
 | R5 | Account management CRUD (bank/investment accounts) | `accounts/` | High | ✅ Done |
 | R6 | Transaction management CRUD (financial transactions linked to accounts) | `transactions/` | High | ✅ Done |
-| R7 | Financial reporting (summaries by category and time period) | `transactions/` | Medium | ⬜ Not started |
+| R7 | Financial reporting (summaries by category and time period) | `reports/` | Medium | ✅ Done |
 | R8 | Data validation (positive amounts, transaction types) | Service Layer | Medium | ⬜ Not started |
 | R9 | Pagination for list endpoints | Controller + Service | Medium | ✅ Done |
 | R10 | Standard error handling with HTTP status codes | `common/` | Medium | ✅ Done |
@@ -53,6 +53,10 @@ com.marakicode.financetracker/
                        # enforcement, dynamic filtering, 3NF type/category reference tables
   transactions/dto/    # TransactionCreateRequest, TransactionUpdateRequest,
                        # TransactionResponse
+  reports/             # Reports read-only aggregation: controller, service, repository,
+                       # security rules
+  reports/dto/         # SummaryResponse, CategoryBreakdownResponse,
+                       # MonthlyBreakdownResponse, AccountBreakdownResponse
 ```
 
 ### Key Design Patterns
@@ -71,6 +75,7 @@ com.marakicode.financetracker/
 | **JPA Specifications** | Dynamic filtering via `Specification` for search and filter parameters on list endpoints. `SearchUtils` escapes LIKE wildcards to prevent injection. |
 | **SecurityUtils** | Static utility in `common/` that resolves the current authenticated user from `SecurityContextHolder`. Guards against null/blank auth, throws `AccessDeniedException`. Shared by `TransactionService` and `AccountService` — eliminates duplicate current-user resolution logic. |
 | **3NF Reference Tables** | Transaction type and category are normalized into reference tables (`transaction_types`, `transaction_categories`) with FK constraints. Service layer uses find-or-create for dynamic categories (`insertIfAbsent` + `findByName`). Mapper uses `@Named` converters to translate entities to DTOs. Specifications JOIN reference tables for filtering. |
+| **JPQL Aggregation** | Read-only reports domain uses JPQL aggregate queries (`SUM`, `COUNT`, `GROUP BY`, `CASE` inside `SUM`, `COALESCE`, `MONTH()`/`YEAR()` date functions) on existing transaction data. Repository returns `Object[]` / `List<Object[]>`, service maps to DTO records. Null-safe optional parameters via `:param IS NULL OR ...` pattern. No new tables — derived data computed at query time. |
 
 ### API Response Convention
 
@@ -89,6 +94,7 @@ com.marakicode.financetracker/
 | `DuplicateResourceException` | 409 | `GlobalExceptionHandler` |
 | `HttpRequestMethodNotSupportedException` | 405 | `GlobalExceptionHandler` |
 | `AccessDeniedException` | 403 | `GlobalExceptionHandler` |
+| `MissingServletRequestParameterException` | 400 | `GlobalExceptionHandler` (missing required query params) |
 | `InvalidJwtAuthenticationException` | 401 | `AuthController` |
 | `BadCredentialsException` | 401 | `AuthController` |
 | Domain-specific exceptions (e.g., password mismatch) | varies | Respective domain controller |
@@ -353,7 +359,46 @@ com.marakicode.financetracker/
 
 ---
 
-### Phase 11: REST Documentation & Final Integration — ⬜ NOT STARTED
+### Phase 11: Reports Domain — ✅ DONE
+
+**Goal:** Read-only aggregation endpoints for financial reporting — income/expense summaries, category breakdown, monthly trends, and per-account analysis.
+
+**What was delivered:**
+
+| Functionality | Description |
+|---------------|-------------|
+| **Summary Endpoint** | `GET /api/v1/reports/summary?from=&to=` — Returns totalIncome, totalExpense, netBalance, transactionCount. Uses `CASE` inside `SUM` for conditional aggregation. |
+| **Category Breakdown** | `GET /api/v1/reports/by-category?type=&from=&to=` — Spending by category with percentage computation. Uses `GROUP BY` + `COALESCE` for null categories ("Uncategorized"). Optional type filter (INCOME/EXPENSE). |
+| **Monthly Breakdown** | `GET /api/v1/reports/monthly?year=` — Month-by-month income vs expense. Uses `MONTH()` and `YEAR()` JPQL date functions. |
+| **Account Breakdown** | `GET /api/v1/reports/by-account?from=&to=` — Per-account income/expense/net. Groups across entity relationships (`t.account.id`, `t.account.name`). |
+| **Date Range Validation** | Private `validateDateRange()` throws `IllegalArgumentException` when `from` is after `to`. Handled by `@ExceptionHandler` in controller returning 400. |
+| **Missing Parameter Handling** | `GlobalExceptionHandler` added `MissingServletRequestParameterException` handler — returns 400 for missing required params (e.g., `year`). |
+
+**Architecture:**
+- Read-only aggregation domain — **no new DB tables, no Flyway migration, no entities, no MapStruct**
+- `ReportsRepository` — 4 JPQL aggregate queries returning `Object[]` / `List<Object[]>`
+- `ReportsService` — orchestrates queries, maps `Object[]` → DTO records, computes category percentages
+- `ReportsSecurityRules` — authentication enforced via catch-all (no permitAll rules)
+- `ReportsController` — 4 GET endpoints at `/api/v1/reports/*` with `@DateTimeFormat` on date params
+- DTOs are response records (no request DTOs, no validation annotations needed)
+- Uses `SecurityUtils.getCurrentUser(userService)` for shared current-user resolution (DRY)
+
+**JPQL patterns demonstrated:**
+- `SUM(CASE WHEN ... THEN ... ELSE ... END)` — conditional aggregation
+- `COALESCE(..., 0)` — null-safe aggregates
+- `GROUP BY ... ORDER BY SUM(...) DESC` — grouped sorted results
+- `MONTH(t.transactionDate)`, `YEAR(t.transactionDate)` — date functions
+- `:param IS NULL OR ...` — null-safe optional parameters
+- `t.type.name`, `t.category.name`, `t.account.user.id` — navigating `@ManyToOne` relationships
+
+**H2 compatibility:**
+- `ReportsRepositoryTest` uses `flattenResult()` helper — H2 wraps multi-column aggregate results in a nested `Object[]` unlike PostgreSQL
+
+**Test coverage:** 31 tests (10 repo + 10 service + 11 controller)
+
+---
+
+### Phase 12: REST Documentation & Final Integration — ⬜ NOT STARTED
 
 **Goal:** Generate API documentation and verify end-to-end flows.
 
@@ -378,10 +423,11 @@ Phase 1 (Foundation)
                     ├── Phase 8 (3NF Refactoring) — normalizes type/category to reference tables
                     ├── Phase 9 (Code Review Round 1) — race conditions, indexes, DRY, balance guard
                     ├── Phase 10 (Code Review Round 2) — migration safety, method extraction, defensive coding
-                    └── Phase 11 (Docs & Integration)
+                    └── Phase 11 (Reports) — read-only aggregation over transaction data
 
 Phase 6 (Code Review Fixes) — applied across Phases 1–4
 Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
+Phase 12 (Docs & Integration)
 ```
 
 ### Cross-Domain Dependencies
@@ -423,8 +469,9 @@ Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
 | Phase 8: 3NF Refactoring | ✅ Complete | — |
 | Phase 9: Code Review Round 1 | ✅ Complete | 8 passing |
 | Phase 10: Code Review Round 2 | ✅ Complete | 12 passing |
-| Phase 11: Docs & Integration | ⬜ Not Started | — |
-| **Total** | | **194 passing (+2 skipped)** |
+| Phase 11: Reports Domain | ✅ Complete | 31 passing |
+| Phase 12: Docs & Integration | ⬜ Not Started | — |
+| **Total** | | **227 passing (+2 skipped)** |
 
 ---
 
@@ -450,7 +497,10 @@ Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
 | `TransactionControllerTest` | `@WebMvcTest` (mocked service) | 19 |
 | `TransactionCategoryRepositoryTest` | `@DataJpaTest` | 3 (+2 skipped) |
 | `SecurityUtilsTest` | `@ExtendWith(MockitoExtension.class)` | 5 |
-| **Total** | | **194 (+2 skipped)** |
+| `ReportsRepositoryTest` | `@DataJpaTest` | 10 |
+| `ReportsServiceTest` | `@ExtendWith(MockitoExtension.class)` | 10 |
+| `ReportsControllerTest` | `@WebMvcTest` (mocked service) | 11 |
+| **Total** | | **227 (+2 skipped)** |
 
 ---
 
@@ -497,3 +547,12 @@ Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
 | GET | `/api/v1/transactions` | authenticated | List transactions (paginated, filterable) |
 | PATCH | `/api/v1/transactions/{id}` | authenticated (owner via account) | Update transaction (partial) |
 | DELETE | `/api/v1/transactions/{id}` | authenticated (owner via account) | Delete transaction |
+
+### Reports Domain
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/reports/summary` | authenticated | Income/Expense summary for a date range |
+| GET | `/api/v1/reports/by-category` | authenticated | Spending breakdown by category |
+| GET | `/api/v1/reports/monthly` | authenticated | Month-by-month income vs expense |
+| GET | `/api/v1/reports/by-account` | authenticated | Per-account income/expense breakdown |
