@@ -83,7 +83,7 @@ jobs:
       - name: Cache OWASP Dependency-Check NVD database
         uses: actions/cache@v6
         with:
-          path: ~/.dependency-check/data
+          path: ~/.m2/repository/org/owasp/dependency-check-data
           key: owasp-nvd-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             owasp-nvd-${{ runner.os }}-
@@ -100,7 +100,9 @@ jobs:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
       - name: Run OWASP Dependency-Check
-        run: mvn dependency-check:check -DnvdApiKey=${{ secrets.NVD_API_KEY }} -q
+        run: mvn dependency-check:check -DnvdApiKey="$NVD_API_KEY" -q
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
       - name: Upload OWASP report
         if: always()
