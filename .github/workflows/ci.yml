@@ -88,10 +88,19 @@ jobs:
           restore-keys: |
             owasp-nvd-${{ runner.os }}-
 
-      - name: Run OWASP Dependency-Check
-        run: mvn dependency-check:check -q
+      - name: Verify NVD API Key
+        run: |
+          if [ -z "$NVD_API_KEY" ]; then
+            echo "NVD_API_KEY is missing"
+            exit 1
+          fi
+          echo "NVD_API_KEY is present"
+          echo "Length: ${#NVD_API_KEY}"
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
+      - name: Run OWASP Dependency-Check
+        run: mvn dependency-check:check -DnvdApiKey=${{ secrets.NVD_API_KEY }} -q
 
       - name: Upload OWASP report
         if: always()
