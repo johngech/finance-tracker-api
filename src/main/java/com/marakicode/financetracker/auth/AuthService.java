@@ -6,6 +6,7 @@ import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -14,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -23,12 +25,15 @@ public class AuthService {
     private final UserService userService;
 
     public JwtResponse login(LoginRequest request, HttpServletResponse response) {
+        log.info("event=auth.login_attempt email={}", request.email());
         authenticateCredentials(request.email(), request.password());
         var user = userService.findByEmail(request.email());
+        log.info("event=auth.login_success userId={}", user.getId());
         return generateTokenPair(user, response);
     }
 
     public UserDto register(RegisterRequest request, HttpServletResponse response) {
+        log.info("event=auth.register email={}", request.email());
         var userDto = userService.createUser(new UserCreateRequest(
                 request.firstName(), request.lastName(), request.email(), request.password()));
         var user = userService.findByEmail(request.email());
@@ -41,6 +46,7 @@ public class AuthService {
         var jwt = jwtService.parseToken(refreshToken);
         validateRefreshToken(jwt);
         var user = userService.findById(jwt.get().getUserId());
+        log.info("event=auth.token_refreshed userId={}", user.getId());
         String accessToken = jwtService.generateAccessToken(user).toString();
         return new JwtResponse(accessToken);
     }
@@ -56,6 +62,7 @@ public class AuthService {
     }
 
     public void logout(HttpServletResponse response) {
+        log.info("event=auth.logout");
         SecurityContextHolder.clearContext();
         deleteRefreshTokenCookie(response);
     }

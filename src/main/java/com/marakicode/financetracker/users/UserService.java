@@ -10,11 +10,13 @@ import com.marakicode.financetracker.users.dto.UserDto;
 import com.marakicode.financetracker.users.dto.UserUpdateRequest;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -31,6 +33,7 @@ public class UserService {
         user.setEmail(normalizedEmail);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         User saved = userRepository.save(user);
+        log.info("event=user.created userId={} email={}", saved.getId(), normalizedEmail);
         return userMapper.toDto(saved);
     }
 
@@ -78,6 +81,7 @@ public class UserService {
         User user = findById(id);
         userMapper.updateEntity(request, user);
         User saved = userRepository.save(user);
+        log.info("event=user.updated userId={}", id);
         return userMapper.toDto(saved);
     }
 
@@ -85,16 +89,19 @@ public class UserService {
     public void updatePassword(Long id, PasswordUpdateRequest request) {
         User user = findById(id);
         if (!passwordEncoder.matches(request.oldPassword(), user.getPasswordHash())) {
+            log.warn("event=user.password_update_failed userId={} reason=old_password_mismatch", id);
             throw new PasswordMismatchException("Current password is incorrect");
         }
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
+        log.info("event=user.password_updated userId={}", id);
     }
 
     @Transactional
     public void deleteUser(Long id) {
         User user = findById(id);
         userRepository.delete(user);
+        log.info("event=user.deleted userId={}", id);
     }
 
     private void validateUniqueEmail(String email) {

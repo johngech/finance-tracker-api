@@ -25,3 +25,8 @@ app:
     allowed-headers: Content-Type,Authorization,X-Requested-With
     allow-credentials: true
     max-age: 3600
+
+logging:
+  level:
+    root: WARN
+    com.marakicode.financetracker: DEBUG

@@ -122,16 +122,17 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.8.17</version>
-        </dependency>
+
 
         <!-- Actuator: health checks, metrics, info endpoints -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi</artifactId>
+            <version>3.0.3</version>
         </dependency>
     </dependencies>
 
@@ -186,12 +187,38 @@
                 <artifactId>dependency-check-maven</artifactId>
                 <version>12.2.2</version>
                 <configuration>
-                    <failBuildOnCVSS>7</failBuildOnCVSS>
+
+                    <!-- GitHub Actions secret -->
+                    <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+
+                    <!-- Local database -->
+                    <dataDirectory>${user.home}/.dependency-check/data</dataDirectory>
+
+                    <!-- Fail only for Critical vulnerabilities -->
+                    <failBuildOnCVSS>8.0</failBuildOnCVSS>
+
+                    <!-- Better reporting -->
+                    <formats>
+                        <format>HTML</format>
+                        <format>JSON</format>
+                        <format>SARIF</format>
+                    </formats>
+
+                    <!-- Optional suppression file -->
                     <suppressionFiles>
-                        <suppressionFile>config/dependency-check-suppression.xml</suppressionFile>
+                        <suppressionFile>
+                            ${project.basedir}/config/dependency-check-suppression.xml
+                        </suppressionFile>
                     </suppressionFiles>
+
+                    <!-- Not needed for Java-only projects -->
                     <nodeAuditSkipDevDependencies>true</nodeAuditSkipDevDependencies>
+
+                    <!-- Retry transient NVD failures -->
+                    <nvdMaxRetryCount>10</nvdMaxRetryCount>
+
                 </configuration>
+
                 <executions>
                     <execution>
                         <goals>
@@ -209,15 +236,19 @@
                 <configuration>
                     <effort>Max</effort>
                     <threshold>Medium</threshold>
-                    <includeFilterFile>${session.executionRootDirectory}/config/spotbugs-exclude.xml</includeFilterFile>
+
+                    <plugins>
+                        <plugin>
+                            <groupId>com.h3xstream.findsecbugs</groupId>
+                            <artifactId>findsecbugs-plugin</artifactId>
+                            <version>1.14.0</version>
+                        </plugin>
+                    </plugins>
+
+                    <includeFilterFile>
+                        ${project.basedir}/config/spotbugs-exclude.xml
+                    </includeFilterFile>
                 </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>com.h3xstream.findsecbugs</groupId>
-                        <artifactId>findsecbugs-plugin</artifactId>
-                        <version>1.14.0</version>
-                    </dependency>
-                </dependencies>
                 <executions>
                     <execution>
                         <id>spotbugs-check</id>

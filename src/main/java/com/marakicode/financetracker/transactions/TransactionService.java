@@ -10,6 +10,7 @@ import com.marakicode.financetracker.transactions.dto.TransactionResponse;
 import com.marakicode.financetracker.transactions.dto.TransactionUpdateRequest;
 import com.marakicode.financetracker.users.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TransactionService {
@@ -38,6 +40,8 @@ public class TransactionService {
         transaction = transactionRepository.save(transaction);
         applyBalanceEffect(account, request.type(), request.amount());
         accountRepository.save(account);
+        log.info("event=transaction.created transactionId={} type={} amount={} accountId={}",
+                transaction.getId(), request.type(), request.amount(), request.accountId());
         return transactionMapper.toResponse(transaction);
     }
 
@@ -79,6 +83,7 @@ public class TransactionService {
 
         reconcileBalanceIfNeeded(existing, originalType, originalAmount);
         transactionRepository.save(existing);
+        log.info("event=transaction.updated transactionId={}", id);
         return transactionMapper.toResponse(existing);
     }
 
@@ -90,6 +95,7 @@ public class TransactionService {
         reverseBalanceEffect(account, toTransactionType(transaction.getType()), transaction.getAmount());
         accountRepository.save(account);
         transactionRepository.delete(transaction);
+        log.info("event=transaction.deleted transactionId={}", id);
     }
 
     private Transaction buildTransaction(TransactionCreateRequest request, Account account) {
@@ -135,6 +141,8 @@ public class TransactionService {
     private void checkInsufficientFunds(Transaction transaction, Account account) {
         if (toTransactionType(transaction.getType()) == TransactionType.EXPENSE
                 && account.getBalance().compareTo(transaction.getAmount()) < 0) {
+            log.warn("event=transaction.insufficient_funds accountId={} balance={} requested={}",
+                    account.getId(), account.getBalance(), transaction.getAmount());
             throw new InsufficientFundsException(
                     "Insufficient funds. Current balance: " + account.getBalance());
         }

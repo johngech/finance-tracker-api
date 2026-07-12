@@ -11,6 +11,7 @@ import com.marakicode.financetracker.common.SecurityUtils;
 import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AccountService {
@@ -37,6 +39,7 @@ public class AccountService {
         account.setBalance(request.initialBalance());
         account.setType(resolveType(request.type()));
         Account saved = accountRepository.save(account);
+        log.info("event=account.created accountId={} name={} userId={}", saved.getId(), request.name(), user.getId());
         return accountMapper.toResponse(saved);
     }
 
@@ -83,6 +86,7 @@ public class AccountService {
         Account account = findOwnedAccount(id, user.getId());
         accountMapper.updateEntity(request, account);
         Account saved = accountRepository.save(account);
+        log.info("event=account.currency_updated accountId={} currency={}", id, request.currency());
         return accountMapper.toResponse(saved);
     }
 
@@ -92,6 +96,7 @@ public class AccountService {
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with id: " + id));
         account.setType(resolveType(request.type()));
         Account saved = accountRepository.save(account);
+        log.info("event=account.type_updated accountId={} type={}", id, request.type());
         return accountMapper.toResponse(saved);
     }
 
@@ -100,6 +105,7 @@ public class AccountService {
         User user = SecurityUtils.getCurrentUser(userService);
         Account account = findOwnedAccount(id, user.getId());
         accountRepository.delete(account);
+        log.info("event=account.deleted accountId={}", id);
     }
 
     private void validateUniqueName(Long userId, String name) {

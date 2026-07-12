@@ -30,6 +30,11 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 30s
 
+logging:
+  level:
+    root: INFO
+    com.marakicode.financetracker: INFO
+
 server:
   port: 8080
 

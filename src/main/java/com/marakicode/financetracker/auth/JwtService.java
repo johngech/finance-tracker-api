@@ -5,11 +5,13 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
 import java.util.Optional;
 
+@Slf4j
 @AllArgsConstructor
 @Service
 public class JwtService {
@@ -51,8 +53,11 @@ public class JwtService {
      */
     public Optional<Jwt> parseToken(String token) {
         try {
-            return Optional.of(new Jwt(jwtConfig.getSecretKey(), getClaims(token)));
+            var jwt = new Jwt(jwtConfig.getSecretKey(), getClaims(token));
+            log.debug("event=jwt.parse_success userId={}", jwt.getUserId());
+            return Optional.of(jwt);
         } catch (JwtException ex) {
+            log.debug("event=jwt.parse_failed reason={}", ex.getMessage());
             return Optional.empty();
         }
     }

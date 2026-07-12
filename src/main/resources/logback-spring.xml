@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Logback configuration — profile-aware, with rolling file support and MDC correlation.
+
+    MDC keys:
+      requestId  — UUID per request (set by RequestLoggingFilter)
+      userEmail  — authenticated user email (set by RequestLoggingFilter)
+
+    Activate profiles via:
+      export SPRING_PROFILES_ACTIVE=dev
+      java -Dspring.profiles.active=prod -jar app.jar
+-->
+<configuration>
+
+    <!-- ── Shared variables ─────────────────────────────────────────── -->
+    <property name="LOG_DIR"       value="logs"/>
+    <property name="APP_PACKAGE"   value="com.marakicode.financetracker"/>
+
+    <!-- ── Console appender (color for dev, plain for stag/prod) ────── -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{requestId:-}] [%X{userEmail:-}] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="CONSOLE_COLOR" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>%d{HH:mm:ss.SSS} [%thread] [%yellow(%X{requestId:-})] [%cyan(%X{userEmail:-})] %highlight(%-5level) %cyan(%logger{15}) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ── Rolling file appender (stag + prod) ──────────────────────── -->
+    <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/application.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/application.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{ISO8601} [%thread] [%X{requestId:-}] [%X{userEmail:-}] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ── Dev profile ──────────────────────────────────────────────── -->
+    <springProfile name="dev">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_COLOR"/>
+        </root>
+        <logger name="${APP_PACKAGE}" level="DEBUG"/>
+    </springProfile>
+
+    <!-- ── Staging profile ──────────────────────────────────────────── -->
+    <springProfile name="stag">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="ROLLING"/>
+        </root>
+        <logger name="${APP_PACKAGE}" level="INFO"/>
+    </springProfile>
+
+    <!-- ── Production profile ───────────────────────────────────────── -->
+    <springProfile name="prod">
+        <root level="ERROR">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="ROLLING"/>
+        </root>
+        <logger name="${APP_PACKAGE}" level="WARN"/>
+    </springProfile>
+
+    <!-- ── Default (no active profile) ──────────────────────────────── -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+    <logger name="${APP_PACKAGE}" level="INFO"/>
+
+</configuration>
