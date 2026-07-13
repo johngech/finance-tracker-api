@@ -167,4 +167,25 @@ class JwtAuthenticationFilterTest {
         // Assert
         verify(filterChain).doFilter(request, response);
     }
+
+    @Test
+    @DisplayName("doFilterInternal should not set authentication when user is inactive")
+    void doFilterInternal_shouldNotSetAuthentication_whenUserInactive() throws ServletException, IOException {
+
+        // Arrange
+        request.addHeader("Authorization", BEARER_PREFIX + VALID_TOKEN);
+        Jwt jwt = validJwt();
+        User inactiveUser = testUser();
+        inactiveUser.setActive(false);
+
+        when(jwtService.parseToken(VALID_TOKEN)).thenReturn(Optional.of(jwt));
+        when(userService.findById(1L)).thenReturn(inactiveUser);
+
+        // Act
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+
+        // Assert
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(authentication).isNull();
+    }
 }

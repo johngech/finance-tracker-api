@@ -14,8 +14,8 @@ import java.nio.charset.StandardCharsets;
 @ConfigurationProperties(prefix = "spring.jwt")
 @Getter
 @Setter
+@ToString(exclude = "secret")
 public class JwtConfig {
-    @ToString.Exclude
     private String secret;
     private long accessTokenExpiration;
     private long refreshTokenExpiration;

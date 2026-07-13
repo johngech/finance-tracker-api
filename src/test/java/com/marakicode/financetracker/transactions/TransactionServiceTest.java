@@ -2,6 +2,7 @@ package com.marakicode.financetracker.transactions;
 
 import com.marakicode.financetracker.accounts.Account;
 import com.marakicode.financetracker.accounts.AccountRepository;
+import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.transactions.dto.TransactionCreateRequest;
@@ -9,8 +10,6 @@ import com.marakicode.financetracker.transactions.dto.TransactionResponse;
 import com.marakicode.financetracker.transactions.dto.TransactionUpdateRequest;
 import com.marakicode.financetracker.users.Role;
 import com.marakicode.financetracker.users.User;
-import com.marakicode.financetracker.users.UserService;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,13 +17,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.quality.Strictness;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -36,10 +33,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Transaction Service Tests")
@@ -58,7 +55,7 @@ class TransactionServiceTest {
     private AccountRepository accountRepository;
 
     @Mock
-    private UserService userService;
+    private CurrentUserProvider currentUserProvider;
 
     @Mock
     private TransactionMapper transactionMapper;
@@ -82,11 +79,7 @@ class TransactionServiceTest {
         account.setBalance(new BigDecimal("1000.00"));
         account.setUser(user);
 
-        when(userService.findByEmail("test@example.com")).thenReturn(user);
-
-        var auth = org.mockito.Mockito.mock(org.springframework.security.core.Authentication.class);
-        lenient().when(auth.getName()).thenReturn("test@example.com");
-        SecurityContextHolder.getContext().setAuthentication(auth);
+        lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
 
         lenient().when(transactionTypeRepository.findByName("INCOME"))
                 .thenReturn(Optional.of(createTypeEntity("INCOME")));
@@ -97,11 +90,6 @@ class TransactionServiceTest {
                     String name = invocation.getArgument(0);
                     return Optional.of(createCategoryEntity(name));
                 });
-    }
-
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
     }
 
     private TransactionTypeEntity createTypeEntity(String name) {
@@ -648,5 +636,21 @@ class TransactionServiceTest {
         assertThat(account.getBalance()).isEqualByComparingTo(new BigDecimal("700.00"));
         verify(accountRepository).save(account);
         verify(transactionRepository).delete(transaction);
+    }
+
+    @Test
+    @DisplayName("createTransaction_frozenAccount_throwsAccountFrozenException - rejects transactions on frozen accounts")
+    void createTransaction_frozenAccount_throwsAccountFrozenException() {
+        // Arrange
+        account.setFrozen(true);
+        var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
+                new BigDecimal("200.00"), "salary", LocalDate.of(2025, 6, 15), "income");
+
+        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
+
+        // Act & Assert
+        assertThatThrownBy(() -> transactionService.createTransaction(request))
+                .isInstanceOf(AccountFrozenException.class)
+                .hasMessageContaining("account is frozen");
     }
 }

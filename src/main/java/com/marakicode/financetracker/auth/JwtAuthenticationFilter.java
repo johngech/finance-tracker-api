@@ -87,6 +87,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         var user = userService.findById(jwt.getUserId());
 
+        if (!user.isActive()) {
+            log.debug("event=jwt.user_inactive userId={}", user.getId());
+            return;
+        }
+
         var authToken = getAuthToken(jwt, user);
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authToken);

@@ -1,7 +1,6 @@
 package com.marakicode.financetracker.transactions;
 
 import com.marakicode.financetracker.common.ApiResponse;
-import com.marakicode.financetracker.common.ErrorDto;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.transactions.dto.TransactionCreateRequest;
 import com.marakicode.financetracker.transactions.dto.TransactionResponse;
@@ -12,7 +11,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -104,16 +102,5 @@ public class TransactionController {
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long id) {
         transactionService.deleteTransaction(id);
         return ResponseEntity.noContent().build();
-    }
-
-    @ExceptionHandler(InsufficientFundsException.class)
-    public ResponseEntity<ErrorDto> handleInsufficientFunds(
-            InsufficientFundsException ex, HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorDto.of(
-                        HttpStatus.BAD_REQUEST.value(),
-                        "Bad Request",
-                        ex.getMessage(),
-                        request.getRequestURI()));
     }
 }

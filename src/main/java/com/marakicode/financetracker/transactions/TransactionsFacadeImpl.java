@@ -28,14 +28,14 @@ public class TransactionsFacadeImpl implements TransactionsFacade {
 
     @Override
     public PagedResponse<TransactionSummary> listTransactions(String search, Pageable pageable) {
-        var spec = Specification.where(TransactionSpecification.descriptionContains(search));
+        var spec = Specification.<Transaction>unrestricted().and(TransactionSpecification.descriptionContains(search));
         var page = transactionRepository.findAll(spec, pageable);
         return PagedResponse.fromPage(page, this::toSummary);
     }
 
     @Override
     public PagedResponse<TransactionSummary> listUserTransactions(Long userId, Pageable pageable) {
-        var spec = Specification.where(userIdEquals(userId));
+        var spec = Specification.<Transaction>unrestricted().and(userIdEquals(userId));
         var page = transactionRepository.findAll(spec, pageable);
         return PagedResponse.fromPage(page, this::toSummary);
     }

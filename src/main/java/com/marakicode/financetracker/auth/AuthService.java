@@ -1,6 +1,5 @@
 package com.marakicode.financetracker.auth;
 
-import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.dto.UserDto;
 import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.UserService;
@@ -55,7 +54,7 @@ public class AuthService {
     public UserDto me() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) {
-            throw new ResourceNotFoundException("Not authenticated");
+            throw new NotAuthenticatedException("Not authenticated");
         }
         String email = auth.getName();
         return userService.getUserByEmail(email);

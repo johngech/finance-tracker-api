@@ -9,6 +9,18 @@ updates:
     labels:
       - dependencies
     open-pull-requests-limit: 10
+    reviewers:
+      - "yohannes"
+    assignees:
+      - "yohannes"
+    groups:
+      spring-boot:
+        patterns:
+          - "org.springframework.boot*"
+      testing:
+        patterns:
+          - "org.junit*"
+          - "org.mockito*"
 
   # GitHub Actions — check monthly
   - package-ecosystem: github-actions
@@ -19,3 +31,7 @@ updates:
       - dependencies
       - ci
     open-pull-requests-limit: 5
+    reviewers:
+      - "yohannes"
+    assignees:
+      - "yohannes"

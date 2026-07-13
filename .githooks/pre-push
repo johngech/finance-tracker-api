@@ -23,12 +23,18 @@ if [ ! -f "pom.xml" ]; then
     exit 0
 fi
 
+# Ensure mvn is available on PATH
+if ! command -v mvn >/dev/null 2>&1; then
+    echo "❌ mvn not found on PATH. Run: source ~/.sdkman/bin/sdkman-init.sh && sdk env"
+    exit 1
+fi
+
 echo ""
 echo "🔧 Pre-push: compiling..."
 
 START_TIME=$(date +%s)
 
-if ! mvn compile -q 2>&1; then
+if ! mvn compile 2>&1; then
     echo ""
     echo "❌ Compilation failed! Fix errors before pushing."
     exit 1
@@ -38,7 +44,7 @@ echo "✅ Compilation passed."
 echo ""
 echo "🧪 Pre-push: running tests..."
 
-if ! mvn test -q 2>&1; then
+if ! mvn test 2>&1; then
     echo ""
     echo "❌ Tests failed! Fix failing tests before pushing."
     exit 1

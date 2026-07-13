@@ -134,6 +134,13 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.8.17</version>
         </dependency>
+
+        <dependency>
+            <groupId>me.paulschwarz</groupId>
+            <artifactId>springboot3-dotenv</artifactId>
+            <version>5.1.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -194,7 +201,7 @@
                     <!-- Local database -->
                     <dataDirectory>${user.home}/.dependency-check/data</dataDirectory>
 
-                    <!-- Fail only for Critical vulnerabilities -->
+                    <!-- Fail for High and Critical vulnerabilities (CVSS >= 8.0) -->
                     <failBuildOnCVSS>8.0</failBuildOnCVSS>
 
                     <!-- Better reporting -->
@@ -245,9 +252,9 @@
                         </plugin>
                     </plugins>
 
-                    <includeFilterFile>
+                    <excludeFilterFile>
                         ${project.basedir}/config/spotbugs-exclude.xml
-                    </includeFilterFile>
+                    </excludeFilterFile>
                 </configuration>
                 <executions>
                     <execution>

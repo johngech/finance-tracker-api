@@ -1,15 +1,11 @@
 package com.marakicode.financetracker.reports;
 
-import com.marakicode.financetracker.common.SecurityUtils;
+import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.reports.dto.AccountBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.CategoryBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.MonthlyBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.SummaryResponse;
 import com.marakicode.financetracker.transactions.TransactionType;
-import com.marakicode.financetracker.users.Role;
-import com.marakicode.financetracker.users.User;
-import com.marakicode.financetracker.users.UserService;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,17 +13,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,30 +33,14 @@ class ReportsServiceTest {
     private ReportsRepository reportsRepository;
 
     @Mock
-    private UserService userService;
+    private CurrentUserProvider currentUserProvider;
 
     @InjectMocks
     private ReportsService reportsService;
 
-    private User user;
-
     @BeforeEach
     void setUp() {
-        user = new User();
-        user.setId(1L);
-        user.setEmail("test@example.com");
-        user.setRole(Role.USER);
-
-        var auth = org.mockito.Mockito.mock(org.springframework.security.core.Authentication.class);
-        org.mockito.Mockito.lenient().when(auth.getName()).thenReturn("test@example.com");
-        SecurityContextHolder.getContext().setAuthentication(auth);
-
-        org.mockito.Mockito.lenient().when(userService.findByEmail("test@example.com")).thenReturn(user);
-    }
-
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
+        lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
     }
 
     // --- getSummary tests ---

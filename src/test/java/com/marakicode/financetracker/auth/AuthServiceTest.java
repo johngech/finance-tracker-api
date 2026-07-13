@@ -287,6 +287,19 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("me should throw NotAuthenticatedException when authentication is null")
+    void me_shouldThrowNotAuthenticated_whenAuthenticationIsNull() {
+
+        // Arrange — no authentication set
+        SecurityContextHolder.clearContext();
+
+        // Act & Assert
+        assertThatThrownBy(() -> authService.me())
+                .isInstanceOf(NotAuthenticatedException.class)
+                .hasMessageContaining("Not authenticated");
+    }
+
+    @Test
     @DisplayName("logout should clear SecurityContext and delete refresh token cookie")
     void logout_shouldClearContext_andDeleteCookie() {
 

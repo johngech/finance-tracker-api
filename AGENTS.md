@@ -90,11 +90,12 @@ com.marakicode.financetracker/
   common/              # ApiResponse, PagedResponse, BaseEntity, GlobalExceptionHandler,
                        # ErrorDto, ResourceNotFoundException, DuplicateResourceException,
                        # ValidationConstants, SecurityRules (functional interface),
-                       # EmailNormalizer, SearchUtils, SecurityUtils
+                       # EmailNormalizer, SearchUtils, CurrentUserProvider
   auth/                # SecurityConfig, CorsProperties, JwtConfig, JwtService, Jwt,
                        # JwtAuthenticationFilter, UserIdPrincipal, UserDetailsServiceImpl,
                        # AuthService, AuthController, AuthSecurityRules, JwtResponse,
-                       # InvalidJwtAuthenticationException, LoginRequest, RegisterRequest
+                       # InvalidJwtAuthenticationException, LoginRequest, RegisterRequest,
+                       # AuthCurrentUserProvider
   users/               # User, Role, UserDto, UserCreateRequest, UserUpdateRequest,
                        # PasswordUpdateRequest, UserMapper, UserRepository,
                        # UserService, UserController, UserSecurityRules
@@ -176,7 +177,7 @@ Each domain package is self-contained with a controller at the domain root. Only
 - `@Transactional` on write methods, `@Transactional(readOnly = true)` on read methods
 - Mockito strict mode: per-stub `lenient()` on `@BeforeEach` stubs only (NOT class-level `@MockitoSettings(strictness = Strictness.LENIENT)`)
 
-## Test inventory (227 tests, 2 skipped)
+## Test inventory (333 tests, 2 skipped)
 
 | Test class | Type | Count |
 |---|---|---|
@@ -197,7 +198,7 @@ Each domain package is self-contained with a controller at the domain root. Only
 | `TransactionServiceTest` | `@ExtendWith(MockitoExtension.class)` | 25 |
 | `TransactionControllerTest` | `@WebMvcTest` (mocked service) | 19 |
 | `TransactionCategoryRepositoryTest` | `@DataJpaTest` | 3 (+2 skipped) |
-| `SecurityUtilsTest` | `@ExtendWith(MockitoExtension.class)` | 5 |
+| `AuthCurrentUserProviderTest` | `@ExtendWith(MockitoExtension.class)` | 3 |
 | `ReportsRepositoryTest` | `@DataJpaTest` | 10 |
 | `ReportsServiceTest` | `@ExtendWith(MockitoExtension.class)` | 10 |
 | `ReportsControllerTest` | `@WebMvcTest` (mocked service) | 11 |
@@ -346,16 +347,16 @@ Each domain package is self-contained with a controller at the domain root. Only
 - **P1 — FK indexes**: Flyway V7 adds `idx_transactions_type` and `idx_transactions_category` on FK columns for efficient Specification JOINs; also cleans up whitespace-only categories
 - **P2 — Balance guard**: `TransactionService.updateTransaction()` only reverses/applies balance when `type` or `amount` actually changed — prevents transient incorrect balance on metadata-only updates and eliminates unnecessary `accountRepository.save()`
 - **P2 — Method length**: Extracted `buildTransaction()` private method from `createTransaction()` to stay within 10-line limit
-- **P2 — DRY**: Extracted `getCurrentUser()` to `common/SecurityUtils.getCurrentUser(UserService)` — shared by `TransactionService` and `AccountService`; throws `AccessDeniedException` instead of `ResourceNotFoundException`
-- **P3 — Auth exception**: `SecurityUtils.getCurrentUser()` throws `AccessDeniedException("Not authenticated")` instead of misusing `ResourceNotFoundException`
+- **P2 — DRY**: Extracted `getCurrentUser()` to `common/SecurityUtils.getCurrentUser(UserService)` — shared by `TransactionService` and `AccountService`; throws `AccessDeniedException` instead of `ResourceNotFoundException` (later replaced by `CurrentUserProvider`)
+- **P3 — Auth exception**: `SecurityUtils.getCurrentUser()` throws `AccessDeniedException("Not authenticated")` instead of misusing `ResourceNotFoundException` (later replaced by `CurrentUserProvider`)
 - **Tests — 8 new tests**: `createTransaction_nullCategory_succeeds`, `createTransaction_invalidType_throwsIllegalArgumentException`, `updateTransaction_onlyDescriptionUpdate_skipsBalanceMutation` (service); `findAll_withCombinedSpecifications_filtersByTypeAndCategoryAndDate`, `findAll_withCombinedSpecifications_filtersByAccountIdAndType` (repo); `updateTransaction_shouldReturn400_withDecimalMinViolation`, `updateTransaction_shouldReturn400_withFutureDate`, `updateTransaction_shouldReturn200_withEmptyBody` (controller)
 
 ### Phase 10: Code Review Round 2 Fixes — DONE
 - **P1 — Migration safety**: V7 now nulls out `transactions.category` before deleting whitespace-only `transaction_categories` rows — prevents FK constraint violation
 - **P2 — `updateTransaction` method length**: Extracted `reconcileBalanceIfNeeded()` private method (balance comparison + reverse/check/apply) from `updateTransaction()` — method now ≤10 lines
-- **P2 — Defensive coding**: `SecurityUtils.getCurrentUser()` now guards against null/blank `auth.getName()` — throws `AccessDeniedException` instead of passing null/blank to `findByEmail()`
+- **P2 — Defensive coding**: `SecurityUtils.getCurrentUser()` now guards against null/blank `auth.getName()` — throws `AccessDeniedException` instead of passing null/blank to `findByEmail()` (later replaced by `CurrentUserProvider`)
 - **P2 — Mock strictness**: Removed class-level `@MockitoSettings(strictness = Strictness.LENIENT)` from `TransactionServiceTest`; replaced with per-stub `lenient()` on `@BeforeEach` stubs only — Mockito strict mode now catches unused stubs at method level
-- **Tests — `SecurityUtilsTest` (5 tests)**: `getCurrentUser_validAuth_returnsUser`, `getCurrentUser_nullAuth_throwsAccessDeniedException`, `getCurrentUser_blankName_throwsAccessDeniedException`, `getCurrentUser_nullName_throwsAccessDeniedException`, `getCurrentUser_realToken_returnsUser`
+- **Tests — `SecurityUtilsTest` (5 tests)**: `getCurrentUser_validAuth_returnsUser`, `getCurrentUser_nullAuth_throwsAccessDeniedException`, `getCurrentUser_blankName_throwsAccessDeniedException`, `getCurrentUser_nullName_throwsAccessDeniedException`, `getCurrentUser_realToken_returnsUser` (later replaced by `AuthCurrentUserProviderTest`)
 - **Tests — `TransactionCategoryRepositoryTest` (3 tests, 2 skipped)**: `findByName_returnsCategory`, `findByName_returnsEmpty_whenNotExists`, `findByName_caseSensitive`; `insertIfAbsent` tests skipped with `@Disabled` (native `ON CONFLICT` requires PostgreSQL)
 - **Tests — 4 new service tests**: `updateTransaction_bothTypeAndAmountChange_adjustsBalance`, `createTransaction_newCategory_persistsCategory`, `createTransaction_categoryCreationFails_throwsIllegalStateException`, `deleteTransaction_nullCategory_succeeds`
 

@@ -4,13 +4,12 @@ import com.marakicode.financetracker.accounts.dto.AccountCreateRequest;
 import com.marakicode.financetracker.accounts.dto.AccountResponse;
 import com.marakicode.financetracker.accounts.dto.CurrencyUpdateRequest;
 import com.marakicode.financetracker.accounts.dto.UpdateAccountTypeRequest;
+import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
-import com.marakicode.financetracker.users.Role;
 import com.marakicode.financetracker.users.User;
-import com.marakicode.financetracker.users.UserService;
-import org.junit.jupiter.api.AfterEach;
+import com.marakicode.financetracker.users.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,9 +22,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -36,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,7 +46,10 @@ class AccountServiceTest {
     private AccountTypeRepository accountTypeRepository;
 
     @Mock
-    private UserService userService;
+    private CurrentUserProvider currentUserProvider;
+
+    @Mock
+    private UserRepository userRepository;
 
     @Mock
     private AccountMapper accountMapper;
@@ -72,16 +72,7 @@ class AccountServiceTest {
         sampleUser.setLastName("Smith");
         sampleUser.setEmail("alice@example.com");
 
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-        org.mockito.Mockito.lenient().when(authentication.getName()).thenReturn("alice@example.com");
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
-    }
-
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
+        lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
     }
 
     private Account sampleAccount() {
@@ -100,14 +91,14 @@ class AccountServiceTest {
     }
 
     @Test
-    @DisplayName("createAccount_shouldReturnResponse_whenValidRequest - creates account with user from security context")
+    @DisplayName("createAccount_shouldReturnResponse_whenValidRequest - creates account with user from current user provider")
     void createAccount_shouldReturnResponse_whenValidRequest() {
         // Arrange
         var request = new AccountCreateRequest("Checking123", AccountType.CHECKING, "USD", new BigDecimal("1000.00"));
         var account = sampleAccount();
         var response = sampleAccountResponse();
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
+        when(userRepository.getReferenceById(1L)).thenReturn(sampleUser);
         when(accountRepository.existsByUserIdAndName(1L, "Checking123")).thenReturn(false);
         when(accountMapper.toEntity(request)).thenReturn(account);
         when(accountTypeRepository.findByName("CHECKING")).thenReturn(Optional.of(checkingEntity));
@@ -131,7 +122,6 @@ class AccountServiceTest {
         var account = sampleAccount();
         var response = sampleAccountResponse();
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
         when(accountMapper.toResponse(account)).thenReturn(response);
 
@@ -146,7 +136,6 @@ class AccountServiceTest {
     @DisplayName("getAccountById_shouldThrow_whenNotFound - throws for nonexistent id or not owned")
     void getAccountById_shouldThrow_whenNotFound() {
         // Arrange
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
         // Act & Assert
@@ -164,7 +153,6 @@ class AccountServiceTest {
         var pageable = PageRequest.of(0, 10, Sort.by("name"));
         Page<Account> page = new PageImpl<>(List.of(account), pageable, 1);
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
         when(accountMapper.toResponse(account)).thenReturn(response);
 
@@ -187,7 +175,6 @@ class AccountServiceTest {
         var pageable = PageRequest.of(0, 10, Sort.by("name"));
         Page<Account> page = new PageImpl<>(List.of(account), pageable, 1);
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
         when(accountMapper.toResponse(account)).thenReturn(response);
 
@@ -207,7 +194,6 @@ class AccountServiceTest {
         var pageable = PageRequest.of(0, 10, Sort.by("name"));
         Page<Account> page = new PageImpl<>(List.of(account), pageable, 1);
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
         when(accountMapper.toResponse(account)).thenReturn(response);
 
@@ -227,7 +213,6 @@ class AccountServiceTest {
         var pageable = PageRequest.of(0, 10, Sort.by("name"));
         Page<Account> page = new PageImpl<>(List.of(account), pageable, 1);
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
         when(accountMapper.toResponse(account)).thenReturn(response);
 
@@ -247,7 +232,6 @@ class AccountServiceTest {
         var updatedResponse = new AccountResponse(1L, "Checking123", AccountType.CHECKING,
                 new BigDecimal("1000.00"), "EUR", LocalDateTime.now());
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
         when(accountRepository.save(account)).thenReturn(account);
         when(accountMapper.toResponse(account)).thenReturn(updatedResponse);
@@ -267,7 +251,6 @@ class AccountServiceTest {
         // Arrange
         var request = new CurrencyUpdateRequest("EUR");
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
         // Act & Assert
@@ -322,7 +305,6 @@ class AccountServiceTest {
         // Arrange
         var request = new AccountCreateRequest("Checking123", AccountType.CHECKING, "USD", new BigDecimal("1000.00"));
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.existsByUserIdAndName(1L, "Checking123")).thenReturn(true);
 
         // Act & Assert
@@ -337,7 +319,6 @@ class AccountServiceTest {
         // Arrange
         var account = sampleAccount();
 
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
 
         // Act
@@ -351,7 +332,6 @@ class AccountServiceTest {
     @DisplayName("deleteAccount_shouldThrow_whenNotFound - throws for nonexistent id")
     void deleteAccount_shouldThrow_whenNotFound() {
         // Arrange
-        when(userService.findByEmail("alice@example.com")).thenReturn(sampleUser);
         when(accountRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
         // Act & Assert

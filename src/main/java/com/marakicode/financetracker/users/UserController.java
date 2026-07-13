@@ -1,20 +1,17 @@
 package com.marakicode.financetracker.users;
 
 import com.marakicode.financetracker.common.ApiResponse;
-import com.marakicode.financetracker.common.ErrorDto;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.users.dto.PasswordUpdateRequest;
 import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.dto.UserDto;
 import com.marakicode.financetracker.users.dto.UserUpdateRequest;
-import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -120,16 +117,5 @@ public class UserController {
             @Valid @RequestBody PasswordUpdateRequest request) {
         userService.updatePassword(id, request);
         return ResponseEntity.ok(ApiResponse.success("Password updated successfully", null));
-    }
-
-    @ExceptionHandler(PasswordMismatchException.class)
-    public ResponseEntity<ErrorDto> handlePasswordMismatchException(
-            PasswordMismatchException ex, HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorDto.of(
-                        HttpStatus.BAD_REQUEST.value(),
-                        "Password Mismatch",
-                        ex.getMessage(),
-                        request.getRequestURI()));
     }
 }

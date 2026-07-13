@@ -332,4 +332,23 @@ class UserServiceTest {
                 .hasMessageContaining("User not found");
         verify(userRepository, never()).delete(any(User.class));
     }
+
+    @Test
+    @DisplayName("createUser_shouldThrowDuplicateResource_whenDataIntegrityViolation - handles race condition")
+    void createUser_shouldThrowDuplicateResource_whenDataIntegrityViolation() {
+        // Arrange
+        var request = new UserCreateRequest("Alice", "Smith", "alice@example.com", "Secret123!");
+        var user = sampleUser();
+
+        when(userRepository.existsByEmailIgnoreCase("alice@example.com")).thenReturn(false);
+        when(userMapper.toEntity(request)).thenReturn(user);
+        when(passwordEncoder.encode("Secret123!")).thenReturn("$2a$10$encodedPassword");
+        when(userRepository.save(user)).thenThrow(
+                new org.springframework.dao.DataIntegrityViolationException("Duplicate email"));
+
+        // Act & Assert
+        assertThatThrownBy(() -> userService.createUser(request))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("Email already registered");
+    }
 }

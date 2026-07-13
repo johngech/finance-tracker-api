@@ -32,7 +32,7 @@ public class JwtService {
                 .add("role", user.getRole().name())
                 .add("type", type)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + tokenExpiration * 1000))
+                .expiration(new Date(System.currentTimeMillis() + tokenExpiration))
                 .build();
         return new Jwt(jwtConfig.getSecretKey(), claims);
     }

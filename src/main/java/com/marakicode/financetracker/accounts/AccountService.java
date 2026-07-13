@@ -4,12 +4,11 @@ import com.marakicode.financetracker.accounts.dto.AccountCreateRequest;
 import com.marakicode.financetracker.accounts.dto.AccountResponse;
 import com.marakicode.financetracker.accounts.dto.CurrencyUpdateRequest;
 import com.marakicode.financetracker.accounts.dto.UpdateAccountTypeRequest;
+import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
-import com.marakicode.financetracker.common.SecurityUtils;
-import com.marakicode.financetracker.users.User;
-import com.marakicode.financetracker.users.UserService;
+import com.marakicode.financetracker.users.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -27,40 +26,41 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final AccountTypeRepository accountTypeRepository;
-    private final UserService userService;
+    private final CurrentUserProvider currentUserProvider;
+    private final UserRepository userRepository;
     private final AccountMapper accountMapper;
 
     @Transactional
     public AccountResponse createAccount(AccountCreateRequest request) {
-        User user = SecurityUtils.getCurrentUser(userService);
-        validateUniqueName(user.getId(), request.name());
+        Long userId = currentUserProvider.getCurrentUserId();
+        validateUniqueName(userId, request.name());
         Account account = accountMapper.toEntity(request);
-        account.setUser(user);
+        account.setUser(userRepository.getReferenceById(userId));
         account.setBalance(request.initialBalance());
         account.setType(resolveType(request.type()));
         Account saved = accountRepository.save(account);
-        log.info("event=account.created accountId={} name={} userId={}", saved.getId(), request.name(), user.getId());
+        log.info("event=account.created accountId={} name={} userId={}", saved.getId(), request.name(), userId);
         return accountMapper.toResponse(saved);
     }
 
     private AccountTypeEntity resolveType(AccountType type) {
         return accountTypeRepository.findByName(type.name())
-                .orElseThrow(() -> new IllegalArgumentException("Unknown account type: " + type));
+                .orElseThrow(() -> new AccountTypeNotFoundException("Unknown account type: " + type));
     }
 
     @Transactional(readOnly = true)
     public AccountResponse getAccountById(Long id) {
-        User user = SecurityUtils.getCurrentUser(userService);
-        Account account = findOwnedAccount(id, user.getId());
+        Long userId = currentUserProvider.getCurrentUserId();
+        Account account = findOwnedAccount(id, userId);
         return accountMapper.toResponse(account);
     }
 
     @Transactional(readOnly = true)
     public PagedResponse<AccountResponse> getAccounts(String search, AccountType type, String currency, Pageable pageable) {
-        User user = SecurityUtils.getCurrentUser(userService);
+        Long userId = currentUserProvider.getCurrentUserId();
 
         List<Specification<Account>> specs = new ArrayList<>();
-        specs.add(AccountSpecification.userIdEquals(user.getId()));
+        specs.add(AccountSpecification.userIdEquals(userId));
 
         if (search != null && !search.isBlank()) {
             specs.add(AccountSpecification.nameContains(search));
@@ -82,8 +82,8 @@ public class AccountService {
 
     @Transactional
     public AccountResponse updateAccount(Long id, CurrencyUpdateRequest request) {
-        User user = SecurityUtils.getCurrentUser(userService);
-        Account account = findOwnedAccount(id, user.getId());
+        Long userId = currentUserProvider.getCurrentUserId();
+        Account account = findOwnedAccount(id, userId);
         accountMapper.updateEntity(request, account);
         Account saved = accountRepository.save(account);
         log.info("event=account.currency_updated accountId={} currency={}", id, request.currency());
@@ -102,8 +102,8 @@ public class AccountService {
 
     @Transactional
     public void deleteAccount(Long id) {
-        User user = SecurityUtils.getCurrentUser(userService);
-        Account account = findOwnedAccount(id, user.getId());
+        Long userId = currentUserProvider.getCurrentUserId();
+        Account account = findOwnedAccount(id, userId);
         accountRepository.delete(account);
         log.info("event=account.deleted accountId={}", id);
     }

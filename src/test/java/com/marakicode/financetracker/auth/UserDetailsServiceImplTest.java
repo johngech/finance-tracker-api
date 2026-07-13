@@ -66,4 +66,21 @@ class UserDetailsServiceImplTest {
                 .isInstanceOf(UsernameNotFoundException.class)
                 .hasMessageContaining("User not found with email: nonexistent@example.com");
     }
+
+    @Test
+    @DisplayName("loadUserByUsername should return disabled UserDetails when user is inactive")
+    void loadUserByUsername_shouldReturnDisabledUserDetails_whenUserInactive() {
+
+        // Arrange
+        var user = sampleUser();
+        user.setActive(false);
+        when(userService.findByEmail("alice@example.com")).thenReturn(user);
+
+        // Act
+        var userDetails = userDetailsService.loadUserByUsername("alice@example.com");
+
+        // Assert
+        assertThat(userDetails).isNotNull();
+        assertThat(userDetails.isEnabled()).isFalse();
+    }
 }

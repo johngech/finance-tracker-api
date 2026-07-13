@@ -11,6 +11,7 @@ import com.marakicode.financetracker.users.dto.UserUpdateRequest;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,9 +33,13 @@ public class UserService {
         User user = userMapper.toEntity(request);
         user.setEmail(normalizedEmail);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        User saved = userRepository.save(user);
-        log.info("event=user.created userId={} email={}", saved.getId(), normalizedEmail);
-        return userMapper.toDto(saved);
+        try {
+            User saved = userRepository.save(user);
+            log.info("event=user.created userId={} email={}", saved.getId(), normalizedEmail);
+            return userMapper.toDto(saved);
+        } catch (DataIntegrityViolationException e) {
+            throw new DuplicateResourceException("Email already registered");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -64,16 +69,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public PagedResponse<UserDto> getAllUsers(Pageable pageable) {
         var page = userRepository.findAll(pageable);
-        var content = page.getContent().stream()
-                .map(userMapper::toDto)
-                .toList();
-        return new PagedResponse<>(
-                content,
-                page.getNumber(),
-                page.getSize(),
-                page.getNumberOfElements(),
-                page.getTotalPages()
-        );
+        return PagedResponse.fromPage(page, userMapper::toDto);
     }
 
     @Transactional

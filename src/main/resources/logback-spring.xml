@@ -29,20 +29,6 @@
         </encoder>
     </appender>
 
-    <!-- ── Rolling file appender (stag + prod) ──────────────────────── -->
-    <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_DIR}/application.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_DIR}/application.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-            <maxFileSize>100MB</maxFileSize>
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>1GB</totalSizeCap>
-        </rollingPolicy>
-        <encoder>
-            <pattern>%d{ISO8601} [%thread] [%X{requestId:-}] [%X{userEmail:-}] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-
     <!-- ── Dev profile ──────────────────────────────────────────────── -->
     <springProfile name="dev">
         <root level="INFO">
@@ -53,6 +39,18 @@
 
     <!-- ── Staging profile ──────────────────────────────────────────── -->
     <springProfile name="stag">
+        <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_DIR}/application.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_DIR}/application.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>1GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder>
+                <pattern>%d{ISO8601} [%thread] [%X{requestId:-}] [%X{userEmail:-}] %-5level %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
         <root level="WARN">
             <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ROLLING"/>
@@ -62,6 +60,18 @@
 
     <!-- ── Production profile ───────────────────────────────────────── -->
     <springProfile name="prod">
+        <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_DIR}/application.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_DIR}/application.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>1GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder>
+                <pattern>%d{ISO8601} [%thread] [%X{requestId:-}] [%X{userEmail:-}] %-5level %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
         <root level="ERROR">
             <appender-ref ref="CONSOLE"/>
             <appender-ref ref="ROLLING"/>

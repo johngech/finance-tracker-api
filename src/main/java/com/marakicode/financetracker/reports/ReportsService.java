@@ -1,12 +1,11 @@
 package com.marakicode.financetracker.reports;
 
-import com.marakicode.financetracker.common.SecurityUtils;
+import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.reports.dto.AccountBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.CategoryBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.MonthlyBreakdownResponse;
 import com.marakicode.financetracker.reports.dto.SummaryResponse;
 import com.marakicode.financetracker.transactions.TransactionType;
-import com.marakicode.financetracker.users.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,37 +18,37 @@ import java.util.List;
 public class ReportsService {
 
     private final ReportsRepository reportsRepository;
-    private final UserService userService;
+    private final CurrentUserProvider currentUserProvider;
 
     @Transactional(readOnly = true)
     public SummaryResponse getSummary(LocalDate from, LocalDate to) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        Object[] result = reportsRepository.getSummaryByUserId(user.getId(), from, to);
+        var userId = currentUserProvider.getCurrentUserId();
+        Object[] result = reportsRepository.getSummaryByUserId(userId, from, to);
         return ReportsMapper.mapToSummary(result);
     }
 
     @Transactional(readOnly = true)
     public List<CategoryBreakdownResponse> getCategoryBreakdown(
             TransactionType type, LocalDate from, LocalDate to) {
-        var user = SecurityUtils.getCurrentUser(userService);
+        var userId = currentUserProvider.getCurrentUserId();
         String typeName = type != null ? type.name() : null;
         List<Object[]> results = reportsRepository.getCategoryBreakdown(
-                user.getId(), typeName, from, to);
+                userId, typeName, from, to);
         return ReportsMapper.mapToCategoryBreakdown(results);
     }
 
     @Transactional(readOnly = true)
     public List<MonthlyBreakdownResponse> getMonthlyBreakdown(int year) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        List<Object[]> results = reportsRepository.getMonthlyBreakdown(user.getId(), year);
+        var userId = currentUserProvider.getCurrentUserId();
+        List<Object[]> results = reportsRepository.getMonthlyBreakdown(userId, year);
         return ReportsMapper.mapToMonthlyBreakdown(results);
     }
 
     @Transactional(readOnly = true)
     public List<AccountBreakdownResponse> getAccountBreakdown(LocalDate from, LocalDate to) {
-        var user = SecurityUtils.getCurrentUser(userService);
+        var userId = currentUserProvider.getCurrentUserId();
         List<Object[]> results = reportsRepository.getAccountBreakdown(
-                user.getId(), from, to);
+                userId, from, to);
         return ReportsMapper.mapToAccountBreakdown(results);
     }
 }

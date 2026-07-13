@@ -2,13 +2,12 @@ package com.marakicode.financetracker.transactions;
 
 import com.marakicode.financetracker.accounts.Account;
 import com.marakicode.financetracker.accounts.AccountRepository;
+import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
-import com.marakicode.financetracker.common.SecurityUtils;
 import com.marakicode.financetracker.transactions.dto.TransactionCreateRequest;
 import com.marakicode.financetracker.transactions.dto.TransactionResponse;
 import com.marakicode.financetracker.transactions.dto.TransactionUpdateRequest;
-import com.marakicode.financetracker.users.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -28,13 +27,14 @@ public class TransactionService {
     private final TransactionTypeRepository transactionTypeRepository;
     private final TransactionCategoryRepository transactionCategoryRepository;
     private final AccountRepository accountRepository;
-    private final UserService userService;
+    private final CurrentUserProvider currentUserProvider;
     private final TransactionMapper transactionMapper;
 
     @Transactional
     public TransactionResponse createTransaction(TransactionCreateRequest request) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        var account = findOwnedAccount(request.accountId(), user.getId());
+        var userId = currentUserProvider.getCurrentUserId();
+        var account = findOwnedAccount(request.accountId(), userId);
+        checkAccountFrozen(account);
         var transaction = buildTransaction(request, account);
         checkInsufficientFunds(transaction, account);
         transaction = transactionRepository.save(transaction);
@@ -47,8 +47,8 @@ public class TransactionService {
 
     @Transactional(readOnly = true)
     public TransactionResponse getTransactionById(Long id) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        Transaction transaction = findOwnedTransaction(id, user.getId());
+        var userId = currentUserProvider.getCurrentUserId();
+        Transaction transaction = findOwnedTransaction(id, userId);
         return transactionMapper.toResponse(transaction);
     }
 
@@ -62,18 +62,18 @@ public class TransactionService {
             LocalDate to,
             Pageable pageable
     ) {
-        var user = SecurityUtils.getCurrentUser(userService);
+        var userId = currentUserProvider.getCurrentUserId();
         Specification<Transaction> spec = buildSpec(accountId, type, category, search, from, to);
         spec = spec.and((root, query, cb) ->
-                cb.equal(root.get("account").get("user").get("id"), user.getId()));
+                cb.equal(root.get("account").get("user").get("id"), userId));
         var page = transactionRepository.findAll(spec, pageable);
         return PagedResponse.fromPage(page, transactionMapper::toResponse);
     }
 
     @Transactional
     public TransactionResponse updateTransaction(Long id, TransactionUpdateRequest request) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        Transaction existing = findOwnedTransaction(id, user.getId());
+        var userId = currentUserProvider.getCurrentUserId();
+        Transaction existing = findOwnedTransaction(id, userId);
         if (isAllFieldsNull(request)) return transactionMapper.toResponse(existing);
 
         TransactionType originalType = toTransactionType(existing.getType());
@@ -89,8 +89,8 @@ public class TransactionService {
 
     @Transactional
     public void deleteTransaction(Long id) {
-        var user = SecurityUtils.getCurrentUser(userService);
-        Transaction transaction = findOwnedTransaction(id, user.getId());
+        var userId = currentUserProvider.getCurrentUserId();
+        Transaction transaction = findOwnedTransaction(id, userId);
         Account account = transaction.getAccount();
         reverseBalanceEffect(account, toTransactionType(transaction.getType()), transaction.getAmount());
         accountRepository.save(account);
@@ -136,6 +136,14 @@ public class TransactionService {
 
     private TransactionType toTransactionType(TransactionTypeEntity entity) {
         return TransactionType.valueOf(entity.getName());
+    }
+
+    private void checkAccountFrozen(Account account) {
+        if (account.isFrozen()) {
+            log.warn("event=transaction.account_frozen accountId={}", account.getId());
+            throw new AccountFrozenException(
+                    "Cannot create transaction: account is frozen");
+        }
     }
 
     private void checkInsufficientFunds(Transaction transaction, Account account) {
@@ -200,7 +208,8 @@ public class TransactionService {
             LocalDate from,
             LocalDate to
     ) {
-        return Specification.where(TransactionSpecification.accountIdEquals(accountId))
+        return Specification.<Transaction>unrestricted()
+                .and(TransactionSpecification.accountIdEquals(accountId))
                 .and(TransactionSpecification.typeEquals(type))
                 .and(TransactionSpecification.categoryEquals(category))
                 .and(TransactionSpecification.descriptionContains(search))

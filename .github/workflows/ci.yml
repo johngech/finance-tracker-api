@@ -10,6 +10,10 @@ permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ─────────────────────────────────────────────
   # Build & Test — always runs (PR + main push)
@@ -41,6 +45,14 @@ jobs:
           name: surefire-reports
           path: target/surefire-reports/
           retention-days: 14
+
+      - name: Publish test results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: JUnit Tests
+          path: target/surefire-reports/TEST-*.xml
+          reporter: java-junit
 
   # ─────────────────────────────────────────────
   # Gitleaks — secret detection (PR + main push)
@@ -83,7 +95,7 @@ jobs:
       - name: Cache OWASP Dependency-Check NVD database
         uses: actions/cache@v6
         with:
-          path: ~/.m2/repository/org/owasp/dependency-check-data
+          path: ~/.dependency-check/data
           key: owasp-nvd-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             owasp-nvd-${{ runner.os }}-
@@ -130,8 +142,8 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: Run SpotBugs
-        run: mvn compile spotbugs:spotbugs -q
+      - name: Run SpotBugs check
+        run: mvn compile test-compile spotbugs:check -q
 
       - name: Upload SpotBugs report
         if: always()

@@ -1,7 +1,6 @@
 package com.marakicode.financetracker.auth;
 
 import com.marakicode.financetracker.common.ApiResponse;
-import com.marakicode.financetracker.common.ErrorDto;
 import com.marakicode.financetracker.users.dto.UserDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 
 @AllArgsConstructor
@@ -90,29 +88,5 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout(HttpServletResponse response) {
         authService.logout(response);
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully", null));
-    }
-
-    @ExceptionHandler(InvalidJwtAuthenticationException.class)
-    public ResponseEntity<ErrorDto> handleInvalidJwtAuthentication(
-            InvalidJwtAuthenticationException ex,
-            jakarta.servlet.http.HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ErrorDto.of(
-                        HttpStatus.UNAUTHORIZED.value(),
-                        "Unauthorized",
-                        ex.getMessage(),
-                        request.getRequestURI()));
-    }
-
-    @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ErrorDto> handleBadCredentials(
-            BadCredentialsException ex,
-            jakarta.servlet.http.HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ErrorDto.of(
-                        HttpStatus.UNAUTHORIZED.value(),
-                        "Unauthorized",
-                        "Invalid email or password",
-                        request.getRequestURI()));
     }
 }
