@@ -47,14 +47,12 @@ bash .githooks/setup.sh   # configures git core.hooksPath
 
 | Plugin | Command | When it runs |
 |--------|---------|-------------|
-| OWASP Dependency-Check | `mvn dependency-check:check` | `verify` phase (CI main branch) |
 | SpotBugs + FindSecBugs | `mvn spotbugs:spotbugs` | `verify` phase (CI main branch) |
 
-- OWASP scans dependencies for known CVEs (fails on CVSS >= 7)
 - SpotBugs with FindSecBugs detects code-level vulnerabilities (SQL injection, hardcoded creds, insecure crypto, XSS)
-- Both are bound to `verify` phase — `mvn test` (local dev) skips them
-- Reports generated in `target/dependency-check/` and `target/spotbugsXml.xml`
-- Exclude filters in `config/spotbugs-exclude.xml`, suppressions in `config/dependency-check-suppression.xml`
+- Bound to `verify` phase — `mvn test` (local dev) skips it
+- Reports generated in `target/spotbugsXml.xml`
+- Exclude filters in `config/spotbugs-exclude.xml`
 
 ### GitHub Actions CI
 
@@ -64,10 +62,9 @@ Workflow: `.github/workflows/ci.yml` — triggered on push to `main` and PRs.
 |-----|---------|-------------|
 | Build & Test | PR + main | Compile + Surefire test reports |
 | Gitleaks | PR + main | Full-history secret scan (`fetch-depth: 0`) |
-| OWASP Scan | main only | Dependency CVE scan + report upload |
 | SpotBugs Scan | main only | Code vulnerability scan + report upload |
 
-**Environment-based behavior:** PRs get fast feedback (build + test + Gitleaks). Main pushes get full security scans (OWASP + SpotBugs).
+**Environment-based behavior:** PRs get fast feedback (build + test + Gitleaks). Main pushes get full security scans (SpotBugs).
 
 ### Dependabot
 

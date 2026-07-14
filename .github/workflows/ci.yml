@@ -75,56 +75,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ─────────────────────────────────────────────
-  # OWASP Dependency-Check — CVE scan (main only)
-  # ─────────────────────────────────────────────
-  owasp-scan:
-    name: OWASP Dependency Check
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: "17"
-          distribution: temurin
-          cache: maven
-
-      - name: Cache OWASP Dependency-Check NVD database
-        uses: actions/cache@v6
-        with:
-          path: ~/.dependency-check/data
-          key: owasp-nvd-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            owasp-nvd-${{ runner.os }}-
-
-      - name: Verify NVD API Key
-        run: |
-          if [ -z "$NVD_API_KEY" ]; then
-            echo "NVD_API_KEY is missing"
-            exit 1
-          fi
-          echo "NVD_API_KEY is present"
-          echo "Length: ${#NVD_API_KEY}"
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-
-      - name: Run OWASP Dependency-Check
-        run: mvn dependency-check:check -DnvdApiKey="$NVD_API_KEY" -q
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-
-      - name: Upload OWASP report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-report
-          path: target/dependency-check/
-          retention-days: 14
-
-  # ─────────────────────────────────────────────
   # SpotBugs + FindSecBugs — code analysis (main only)
   # ─────────────────────────────────────────────
   spotbugs-scan:

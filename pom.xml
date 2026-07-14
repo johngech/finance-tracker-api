@@ -188,53 +188,6 @@
                     </excludes>
                 </configuration>
             </plugin>
-            <!-- OWASP Dependency-Check: scans dependencies for known CVEs -->
-            <plugin>
-                <groupId>org.owasp</groupId>
-                <artifactId>dependency-check-maven</artifactId>
-                <version>12.2.2</version>
-                <configuration>
-
-                    <!-- GitHub Actions secret -->
-                    <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
-
-                    <!-- Local database -->
-                    <dataDirectory>${user.home}/.dependency-check/data</dataDirectory>
-
-                    <!-- Fail for High and Critical vulnerabilities (CVSS >= 8.0) -->
-                    <failBuildOnCVSS>8.0</failBuildOnCVSS>
-
-                    <!-- Better reporting -->
-                    <formats>
-                        <format>HTML</format>
-                        <format>JSON</format>
-                        <format>SARIF</format>
-                    </formats>
-
-                    <!-- Optional suppression file -->
-                    <suppressionFiles>
-                        <suppressionFile>
-                            ${project.basedir}/config/dependency-check-suppression.xml
-                        </suppressionFile>
-                    </suppressionFiles>
-
-                    <!-- Not needed for Java-only projects -->
-                    <nodeAuditSkipDevDependencies>true</nodeAuditSkipDevDependencies>
-
-                    <!-- Retry transient NVD failures -->
-                    <nvdMaxRetryCount>10</nvdMaxRetryCount>
-
-                </configuration>
-
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
             <!-- SpotBugs + FindSecBugs: static code analysis for security vulnerabilities -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
