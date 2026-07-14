@@ -1,0 +1,8 @@
+# ==========================================
+# Docker Build Context Exclusions
+# ==========================================
+# Whitelist approach: exclude everything, then allow only what the build needs.
+
+*
+!pom.xml
+!src/

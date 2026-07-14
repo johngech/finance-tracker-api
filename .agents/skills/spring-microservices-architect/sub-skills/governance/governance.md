@@ -110,9 +110,9 @@ FROM eclipse-temurin:26-jre
 **Check:**
 ```bash
 # Verify all services are present
-grep "^  [a-z]" docker-compose.yml | tr -d ':' | sort
+grep "^  [a-z]" compose.yaml | tr -d ':' | sort
 # Verify health checks
-grep -c "healthcheck" docker-compose.yml
+grep -c "healthcheck" compose.yaml
 ```
 
 **Required services (after discovery layer):**

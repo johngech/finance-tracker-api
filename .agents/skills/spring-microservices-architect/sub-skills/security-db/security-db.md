@@ -1279,7 +1279,7 @@ These are **non-negotiable** rules for all security-db patterns:
 Add MySQL for security tables alongside existing infrastructure:
 
 ```yaml
-# Additions to docker-compose.yml
+# Additions to compose.yaml
 auth-db:
   image: mysql:8.4
   mem_limit: 512m

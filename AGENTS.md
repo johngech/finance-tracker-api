@@ -38,7 +38,7 @@ bash .githooks/setup.sh   # configures git core.hooksPath
 
 | Hook | What it does | Bypass |
 |------|-------------|--------|
-| `pre-commit` | Gitleaks secret detection on staged files | `git commit --no-verify` |
+| `pre-commit` | Gitleaks secret scan + `mvn compile` + `mvn test` (blocks commit on failure) | `git commit --no-verify` |
 | `pre-push` | `mvn compile` + `mvn test` (blocks push on failure) | `git push --no-verify` or `SKIP_PUSH_HOOKS=1 git push` |
 
 **Prerequisites:** `gitleaks` (`brew install gitleaks` or `go install github.com/gitleaks/gitleaks/v8@latest`), Java 17 + Maven.

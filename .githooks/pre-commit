@@ -1,34 +1,80 @@
 #!/bin/sh
 #
-# pre-commit hook — Secret detection via Gitleaks
+# pre-commit hook — Secret detection + Build + Test gate
 #
-# Blocks commits that contain detected secrets (API keys, passwords, tokens).
-# Install gitleaks: https://github.com/gitleaks/gitleaks#installation
+# 1. Scans staged files for secrets (Gitleaks)
+# 2. Compiles the project (mvn compile)
+# 3. Runs the full test suite (mvn test)
+#
+# Blocks commit if any step fails.
 #
 # Skip: git commit --no-verify
 #
 
 set -e
 
-# Check if gitleaks is installed
+# ── 1. Secret Detection (Gitleaks) ─────────────────────────────
+
 if ! command -v gitleaks >/dev/null 2>&1; then
     echo "⚠  gitleaks not installed — skipping secret scan."
     echo "   Install: https://github.com/gitleaks/gitleaks#installation"
+else
+    echo "🔍 Running Gitleaks secret scan on staged files..."
+
+    if gitleaks detect --staged --redact --verbose 2>&1; then
+        echo "✅ No secrets detected."
+    else
+        echo ""
+        echo "❌ Secret detected in staged files!"
+        echo "   Review the output above and remove the secret."
+        echo "   To bypass (NOT recommended): git commit --no-verify"
+        exit 1
+    fi
+fi
+
+# ── 2. Pre-flight checks ───────────────────────────────────────
+
+# Ensure we're in the project root (where pom.xml lives)
+if [ ! -f "pom.xml" ]; then
+    echo "⚠  pom.xml not found — skipping build & test."
     exit 0
 fi
 
-echo "🔍 Running Gitleaks secret scan on staged files..."
-
-# --staged: only scan staged changes
-# --redact: mask detected secrets in output
-# --verbose: show progress
-if gitleaks detect --staged --redact --verbose 2>&1; then
-    echo "✅ No secrets detected."
-    exit 0
-else
-    echo ""
-    echo "❌ Secret detected in staged files!"
-    echo "   Review the output above and remove the secret."
-    echo "   To bypass (NOT recommended): git commit --no-verify"
+# Ensure mvn is available on PATH
+if ! command -v mvn >/dev/null 2>&1; then
+    echo "❌ mvn not found on PATH. Run: source ~/.sdkman/bin/sdkman-init.sh && sdk env"
     exit 1
 fi
+
+# ── 3. Compile ─────────────────────────────────────────────────
+
+echo ""
+echo "🔧 Pre-commit: compiling..."
+
+START_TIME=$(date +%s)
+
+if ! mvn compile 2>&1; then
+    echo ""
+    echo "❌ Compilation failed! Fix errors before committing."
+    exit 1
+fi
+
+echo "✅ Compilation passed."
+
+# ── 4. Test ────────────────────────────────────────────────────
+
+echo ""
+echo "🧪 Pre-commit: running tests..."
+
+if ! mvn test 2>&1; then
+    echo ""
+    echo "❌ Tests failed! Fix failing tests before committing."
+    exit 1
+fi
+
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
+
+echo "✅ All tests passed."
+echo "⏱  Pre-commit completed in ${ELAPSED}s."
+echo ""

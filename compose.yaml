@@ -1,0 +1,62 @@
+# ==========================================
+# FinanceTracker — Docker Compose
+# ==========================================
+# Quick start:
+#   docker compose up --build
+#
+# Environment variables are read from .env in the project root.
+# Required variables (app will not start without them):
+#   JWT_SECRET, DB_PASSWORD
+#
+# Sensitive defaults are intentionally omitted — Docker Compose
+# will fail fast with a clear error if a required variable is missing.
+# ==========================================
+
+services:
+  # ---- Spring Boot Application ----
+  app:
+    build: .
+    container_name: financetracker-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-financetracker}
+      - DB_USERNAME=${DB_USERNAME:?DB_USERNAME is required}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Allow 45s for graceful shutdown (Spring lifecycle timeout is 30s + buffer).
+    stop_grace_period: 45s
+    restart: unless-stopped
+
+  # ---- PostgreSQL Database ----
+  postgres:
+    image: postgres:16-alpine
+    container_name: financetracker-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-financetracker}
+      - POSTGRES_USER=${DB_USERNAME:?DB_USERNAME is required}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
