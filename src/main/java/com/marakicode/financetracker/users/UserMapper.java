@@ -18,7 +18,7 @@ public interface UserMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "email", ignore = true)
     @Mapping(target = "passwordHash", ignore = true)
-    @Mapping(target = "role", ignore = true)
+    @Mapping(target = "role", expression = "java(com.marakicode.financetracker.users.Role.USER)")
     User toEntity(UserCreateRequest request);
 
     UserDto toDto(User user);

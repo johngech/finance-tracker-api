@@ -31,6 +31,9 @@ spring:
 app:
   cors:
     allowed-origin-patterns: ${CORS_ORIGIN:http://localhost:3000}
+  admin:
+    initializer:
+      enabled: true
 
 logging:
   level:

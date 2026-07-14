@@ -6,6 +6,7 @@ import com.marakicode.financetracker.users.dto.PasswordUpdateRequest;
 import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.dto.UserDto;
 import com.marakicode.financetracker.users.dto.UserUpdateRequest;
+import com.marakicode.financetracker.users.exceptions.LastAdminActionException;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -350,5 +351,53 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.createUser(request))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("Email already registered");
+    }
+
+    @Test
+    @DisplayName("deleteUser throws when last active admin — rejects deletion of sole admin")
+    void deleteUser_shouldThrow_whenLastAdmin() {
+        // Arrange
+        var adminUser = sampleUser();
+        adminUser.setRole(Role.ADMIN);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(adminUser));
+        when(userRepository.countByRoleAndActiveTrue(Role.ADMIN)).thenReturn(1L);
+
+        // Act & Assert
+        assertThatThrownBy(() -> userService.deleteUser(1L))
+                .isInstanceOf(LastAdminActionException.class)
+                .hasMessageContaining("Cannot delete the last admin user");
+        verify(userRepository, never()).delete(any(User.class));
+    }
+
+    @Test
+    @DisplayName("deleteUser succeeds when multiple active admins — allows deletion")
+    void deleteUser_shouldSucceed_whenMultipleAdmins() {
+        // Arrange
+        var adminUser = sampleUser();
+        adminUser.setRole(Role.ADMIN);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(adminUser));
+        when(userRepository.countByRoleAndActiveTrue(Role.ADMIN)).thenReturn(2L);
+
+        // Act
+        userService.deleteUser(1L);
+
+        // Assert
+        verify(userRepository).delete(adminUser);
+    }
+
+    @Test
+    @DisplayName("deleteUser succeeds for non-admin — no active-admin count check")
+    void deleteUser_shouldSucceed_whenNonAdmin() {
+        // Arrange
+        var user = sampleUser();
+        user.setRole(Role.USER);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        // Act
+        userService.deleteUser(1L);
+
+        // Assert
+        verify(userRepository).delete(user);
+        verify(userRepository, never()).countByRole(any());
     }
 }

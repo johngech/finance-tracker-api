@@ -5,6 +5,7 @@ import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.common.SearchUtils;
 import com.marakicode.financetracker.users.dto.UserStatistics;
 import com.marakicode.financetracker.users.dto.UserSummary;
+import com.marakicode.financetracker.users.exceptions.LastAdminActionException;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -66,6 +67,10 @@ public class UsersFacadeImpl implements UsersFacade {
     @Transactional
     public void suspendUser(Long userId) {
         var user = findUserOrThrow(userId);
+        if (user.getRole() == Role.ADMIN && user.isActive()
+                && userRepository.countByRoleAndActiveTrue(Role.ADMIN) <= 1) {
+            throw new LastAdminActionException("Cannot suspend the last admin user");
+        }
         user.setActive(false);
         userRepository.save(user);
     }
@@ -92,6 +97,10 @@ public class UsersFacadeImpl implements UsersFacade {
     @Transactional
     public void updateUserRole(Long userId, Role role) {
         var user = findUserOrThrow(userId);
+        if (user.getRole() == Role.ADMIN && role != Role.ADMIN
+                && userRepository.countByRoleAndActiveTrue(Role.ADMIN) <= 1) {
+            throw new LastAdminActionException("Cannot demote the last admin user");
+        }
         user.setRole(role);
         userRepository.save(user);
     }

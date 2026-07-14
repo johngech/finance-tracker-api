@@ -8,6 +8,7 @@ import com.marakicode.financetracker.users.dto.PasswordUpdateRequest;
 import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.dto.UserDto;
 import com.marakicode.financetracker.users.dto.UserUpdateRequest;
+import com.marakicode.financetracker.users.exceptions.LastAdminActionException;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -96,6 +97,9 @@ public class UserService {
     @Transactional
     public void deleteUser(Long id) {
         User user = findById(id);
+        if (user.getRole() == Role.ADMIN && userRepository.countByRoleAndActiveTrue(Role.ADMIN) <= 1) {
+            throw new LastAdminActionException("Cannot delete the last admin user");
+        }
         userRepository.delete(user);
         log.info("event=user.deleted userId={}", id);
     }

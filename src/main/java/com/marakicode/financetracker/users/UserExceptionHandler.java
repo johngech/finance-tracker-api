@@ -1,6 +1,7 @@
 package com.marakicode.financetracker.users;
 
 import com.marakicode.financetracker.common.ErrorDto;
+import com.marakicode.financetracker.users.exceptions.LastAdminActionException;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.Ordered;
@@ -21,6 +22,17 @@ public class UserExceptionHandler {
                 .body(ErrorDto.of(
                         HttpStatus.BAD_REQUEST.value(),
                         "Password Mismatch",
+                        ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    @ExceptionHandler(LastAdminActionException.class)
+    public ResponseEntity<ErrorDto> handleLastAdminAction(
+            LastAdminActionException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorDto.of(
+                        HttpStatus.CONFLICT.value(),
+                        "Conflict",
                         ex.getMessage(),
                         request.getRequestURI()));
     }

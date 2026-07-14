@@ -1,6 +1,7 @@
 package com.marakicode.financetracker.users;
 
 import com.marakicode.financetracker.common.ResourceNotFoundException;
+import com.marakicode.financetracker.users.exceptions.LastAdminActionException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -275,5 +276,149 @@ class UsersFacadeImplTest {
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> usersFacade.updateUserRole(999L, Role.ADMIN))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("demoting last active admin throws — prevents zero active admins")
+    void updateUserRole_demotingLastAdmin_throwsLastAdminActionException() {
+        // Arrange
+        var admin = sampleUser();
+        admin.setRole(Role.ADMIN);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.countByRoleAndActiveTrue(Role.ADMIN)).thenReturn(1L);
+
+        // Act & Assert
+        assertThatThrownBy(() -> usersFacade.updateUserRole(1L, Role.USER))
+                .isInstanceOf(LastAdminActionException.class)
+                .hasMessageContaining("Cannot demote the last admin user");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("promoting user to admin succeeds — promotion is never blocked")
+    void updateUserRole_promotingUser_succeeds_evenWhenOneAdminExists() {
+        // Arrange — promoting a USER to ADMIN should not be blocked
+        var user = sampleUser();
+        user.setRole(Role.USER);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenReturn(user);
+
+        // Act
+        usersFacade.updateUserRole(1L, Role.ADMIN);
+
+        // Assert
+        var captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertThat(captor.getValue().getRole()).isEqualTo(Role.ADMIN);
+    }
+
+    @Test
+    @DisplayName("demoting admin succeeds when multiple active admins exist")
+    void updateUserRole_demotingAdmin_succeeds_whenMultipleAdmins() {
+        // Arrange
+        var admin = sampleUser();
+        admin.setRole(Role.ADMIN);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.countByRoleAndActiveTrue(Role.ADMIN)).thenReturn(2L);
+        when(userRepository.save(any(User.class))).thenReturn(admin);
+
+        // Act
+        usersFacade.updateUserRole(1L, Role.USER);
+
+        // Assert
+        var captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertThat(captor.getValue().getRole()).isEqualTo(Role.USER);
+    }
+
+    @Test
+    @DisplayName("suspending last active admin throws — prevents zero active admins")
+    void suspendUser_lastActiveAdmin_throwsLastAdminActionException() {
+        // Arrange
+        var admin = sampleUser();
+        admin.setRole(Role.ADMIN);
+        admin.setActive(true);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.countByRoleAndActiveTrue(Role.ADMIN)).thenReturn(1L);
+
+        // Act & Assert
+        assertThatThrownBy(() -> usersFacade.suspendUser(1L))
+                .isInstanceOf(LastAdminActionException.class)
+                .hasMessageContaining("Cannot suspend the last admin user");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("suspending admin succeeds when multiple active admins exist")
+    void suspendUser_otherAdmin_succeeds_whenMultipleAdmins() {
+        // Arrange
+        var admin = sampleUser();
+        admin.setRole(Role.ADMIN);
+        admin.setActive(true);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.countByRoleAndActiveTrue(Role.ADMIN)).thenReturn(2L);
+        when(userRepository.save(any(User.class))).thenReturn(admin);
+
+        // Act
+        usersFacade.suspendUser(1L);
+
+        // Assert
+        var captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertThat(captor.getValue().isActive()).isFalse();
+    }
+
+    @Test
+    @DisplayName("suspendUser_nonAdmin_succeeds - no admin check for regular users")
+    void suspendUser_nonAdmin_succeeds() {
+        // Arrange
+        var user = sampleUser();
+        user.setRole(Role.USER);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenReturn(user);
+
+        // Act
+        usersFacade.suspendUser(1L);
+
+        // Assert
+        var captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertThat(captor.getValue().isActive()).isFalse();
+        verify(userRepository, never()).countByRoleAndActiveTrue(any());
+    }
+
+    @Test
+    @DisplayName("suspendUser_alreadyInactiveLastAdmin_succeeds - no-op on already-suspended admin")
+    void suspendUser_alreadyInactiveLastAdmin_succeeds() {
+        // Arrange — already-inactive admin should not be blocked by the guard
+        var admin = sampleUser();
+        admin.setRole(Role.ADMIN);
+        admin.setActive(false);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.save(any(User.class))).thenReturn(admin);
+
+        // Act — should NOT throw even though countByRoleAndActiveTrue <= 1
+        usersFacade.suspendUser(1L);
+
+        // Assert
+        verify(userRepository).save(any(User.class));
+        verify(userRepository, never()).countByRoleAndActiveTrue(any());
+    }
+
+    @Test
+    @DisplayName("updateRole_adminToAdmin_succeeds_evenWhenOnlyAdmin - no-op role reassignment")
+    void updateRole_adminToAdmin_succeeds_evenWhenOnlyAdmin() {
+        // Arrange — reassigning ADMIN to ADMIN should bypass the guard
+        var admin = sampleUser();
+        admin.setRole(Role.ADMIN);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.save(any(User.class))).thenReturn(admin);
+
+        // Act
+        usersFacade.updateUserRole(1L, Role.ADMIN);
+
+        // Assert
+        verify(userRepository).save(any(User.class));
+        verify(userRepository, never()).countByRoleAndActiveTrue(any());
     }
 }

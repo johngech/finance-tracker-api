@@ -25,6 +25,9 @@ app:
     allowed-headers: Content-Type,Authorization,X-Requested-With
     allow-credentials: true
     max-age: 3600
+  admin:
+    initializer:
+      enabled: false
 
 logging:
   level:

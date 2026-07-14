@@ -10,6 +10,7 @@ import com.marakicode.financetracker.users.dto.UserDto;
 import com.marakicode.financetracker.users.dto.UserUpdateRequest;
 import com.marakicode.financetracker.users.exceptions.PasswordMismatchException;
 import com.marakicode.financetracker.users.Role;
+import com.marakicode.financetracker.users.exceptions.LastAdminActionException;
 import com.marakicode.financetracker.auth.JwtService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -292,5 +293,20 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"firstName\":\"Alice\",\"lastName\":\"Smith\"}"))
                 .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    @DisplayName("deleteUser_shouldReturn409_whenLastAdmin - DELETE last admin returns 409 Conflict")
+    void deleteUser_shouldReturn409_whenLastAdmin() throws Exception {
+
+        // Arrange
+        doThrow(new LastAdminActionException("Cannot delete the last admin user"))
+                .when(userService).deleteUser(1L);
+
+        // Act & Assert
+        mockMvc.perform(delete("/api/v1/users/1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").value("Cannot delete the last admin user"));
     }
 }

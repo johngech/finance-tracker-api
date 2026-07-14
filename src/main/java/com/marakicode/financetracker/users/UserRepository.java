@@ -12,6 +12,10 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     boolean existsByEmailIgnoreCase(String email);
 
+    long countByRole(Role role);
+
+    long countByRoleAndActiveTrue(Role role);
+
     @Query("SELECT " +
         "COUNT(u), " +
         "SUM(CASE WHEN u.active = true THEN 1 ELSE 0 END), " +
