@@ -48,15 +48,15 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         String requestId = UUID.randomUUID().toString();
         MDC.put(REQUEST_ID, requestId);
 
-        String userEmail = extractUserEmail();
-        if (userEmail != null) {
-            MDC.put(USER_EMAIL, userEmail);
-        }
-
         long startTime = System.nanoTime();
         try {
             filterChain.doFilter(request, response);
         } finally {
+            // Extract email AFTER JWT filter has populated SecurityContext
+            String userEmail = extractUserEmail();
+            if (userEmail != null) {
+                MDC.put(USER_EMAIL, userEmail);
+            }
             long durationMs = (System.nanoTime() - startTime) / 1_000_000;
             log.info("event=http.request method={} uri={} status={} durationMs={}",
                     request.getMethod(), request.getRequestURI(), response.getStatus(), durationMs);

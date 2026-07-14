@@ -55,6 +55,14 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 
+    /**
+     * Returns a reference (proxy) to the User entity without hitting the database.
+     * Useful for setting associations without a SELECT roundtrip.
+     */
+    public User getReferenceById(Long id) {
+        return userRepository.getReferenceById(id);
+    }
+
     @Transactional(readOnly = true)
     public UserDto getUserByEmail(String email) {
         User user = findByEmail(email);

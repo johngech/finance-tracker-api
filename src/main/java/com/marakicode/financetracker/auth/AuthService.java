@@ -1,8 +1,9 @@
 package com.marakicode.financetracker.auth;
 
-import com.marakicode.financetracker.users.dto.UserDto;
-import com.marakicode.financetracker.users.dto.UserCreateRequest;
+import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.users.UserService;
+import com.marakicode.financetracker.users.dto.UserCreateRequest;
+import com.marakicode.financetracker.users.dto.UserDto;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final UserService userService;
+    private final CurrentUserProvider currentUserProvider;
 
     public JwtResponse login(LoginRequest request, HttpServletResponse response) {
         log.info("event=auth.login_attempt email={}", request.email());
@@ -35,7 +37,7 @@ public class AuthService {
         log.info("event=auth.register email={}", request.email());
         var userDto = userService.createUser(new UserCreateRequest(
                 request.firstName(), request.lastName(), request.email(), request.password()));
-        var user = userService.findByEmail(request.email());
+        var user = userService.findById(userDto.id());
         String refreshToken = jwtService.generateRefreshToken(user).toString();
         addRefreshTokenCookie(refreshToken, response);
         return userDto;
@@ -52,12 +54,8 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public UserDto me() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) {
-            throw new NotAuthenticatedException("Not authenticated");
-        }
-        String email = auth.getName();
-        return userService.getUserByEmail(email);
+        Long userId = currentUserProvider.getCurrentUserId();
+        return userService.getUserById(userId);
     }
 
     public void logout(HttpServletResponse response) {
@@ -74,23 +72,19 @@ public class AuthService {
     }
 
     private void addRefreshTokenCookie(String refreshToken, HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Lax")
-                .path("/api/v1/auth")
-                .maxAge(jwtService.getRefreshTokenExpiration())
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        setRefreshCookie(refreshToken, jwtService.getRefreshTokenExpiration(), response);
     }
 
     private void deleteRefreshTokenCookie(HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from("refreshToken", "")
+        setRefreshCookie("", 0, response);
+    }
+
+    private void setRefreshCookie(String value, long maxAge, HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", value)
                 .httpOnly(true)
                 .secure(true)
-                .sameSite("Lax")
                 .path("/api/v1/auth")
-                .maxAge(0)
+                .maxAge(maxAge)
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }

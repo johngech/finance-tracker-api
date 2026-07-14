@@ -9,6 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Read-only aggregation repository for Transaction data.
+ * Does NOT extend JpaRepository to prevent accidental writes.
+ */
 @Transactional(readOnly = true)
 public interface ReportsRepository extends JpaRepository<Transaction, Long> {
 

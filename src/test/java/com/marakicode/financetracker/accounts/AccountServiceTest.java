@@ -10,6 +10,7 @@ import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserRepository;
+import com.marakicode.financetracker.users.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,9 @@ class AccountServiceTest {
     @InjectMocks
     private AccountService accountService;
 
+    @Mock
+    private UserService userService;
+
     private AccountTypeEntity checkingEntity;
     private User sampleUser;
 
@@ -73,6 +77,7 @@ class AccountServiceTest {
         sampleUser.setEmail("alice@example.com");
 
         lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
+        lenient().when(userService.getReferenceById(1L)).thenReturn(sampleUser);
     }
 
     private Account sampleAccount() {
@@ -98,12 +103,11 @@ class AccountServiceTest {
         var account = sampleAccount();
         var response = sampleAccountResponse();
 
-        when(userRepository.getReferenceById(1L)).thenReturn(sampleUser);
-        when(accountRepository.existsByUserIdAndName(1L, "Checking123")).thenReturn(false);
-        when(accountMapper.toEntity(request)).thenReturn(account);
-        when(accountTypeRepository.findByName("CHECKING")).thenReturn(Optional.of(checkingEntity));
-        when(accountRepository.save(account)).thenReturn(account);
-        when(accountMapper.toResponse(account)).thenReturn(response);
+        lenient().when(accountRepository.existsByUserIdAndName(1L, "Checking123")).thenReturn(false);
+        lenient().when(accountMapper.toEntity(request)).thenReturn(account);
+        lenient().when(accountTypeRepository.findByName("CHECKING")).thenReturn(Optional.of(checkingEntity));
+        lenient().when(accountRepository.save(account)).thenReturn(account);
+        lenient().when(accountMapper.toResponse(account)).thenReturn(response);
 
         // Act
         var result = accountService.createAccount(request);

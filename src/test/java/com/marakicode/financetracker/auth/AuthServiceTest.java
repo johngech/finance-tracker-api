@@ -1,5 +1,6 @@
 package com.marakicode.financetracker.auth;
 
+import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
 import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.dto.UserCreateRequest;
@@ -8,6 +9,7 @@ import com.marakicode.financetracker.users.UserService;
 import com.marakicode.financetracker.users.Role;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,9 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -45,6 +45,9 @@ class AuthServiceTest {
     private UserService userService;
 
     @Mock
+    private CurrentUserProvider currentUserProvider;
+
+    @Mock
     private HttpServletResponse httpResponse;
 
     @InjectMocks
@@ -53,6 +56,11 @@ class AuthServiceTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
     }
 
     private User testUser() {
@@ -158,11 +166,11 @@ class AuthServiceTest {
         var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER, LocalDateTime.now());
         var refreshJwt = testRefreshJwt(1L);
 
-        when(userService.createUser(any(UserCreateRequest.class)))
+        lenient().when(userService.createUser(any(UserCreateRequest.class)))
                 .thenReturn(userDto);
-        when(userService.findByEmail("alice@example.com")).thenReturn(user);
-        when(jwtService.generateRefreshToken(user)).thenReturn(refreshJwt);
-        when(jwtService.getRefreshTokenExpiration()).thenReturn(604800000L);
+        lenient().when(userService.findById(1L)).thenReturn(user);
+        lenient().when(jwtService.generateRefreshToken(any())).thenReturn(refreshJwt);
+        lenient().when(jwtService.getRefreshTokenExpiration()).thenReturn(604800000L);
 
         // Act
         var result = authService.register(registerRequest, httpResponse);
@@ -245,17 +253,11 @@ class AuthServiceTest {
     void me_shouldReturnUserDto_whenAuthenticated() {
 
         // Arrange
-        var user = testUser();
         var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER,
                 LocalDateTime.of(2025, 1, 15, 10, 30));
 
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-        when(authentication.getName()).thenReturn("alice@example.com");
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
-
-        when(userService.getUserByEmail("alice@example.com")).thenReturn(userDto);
+        lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(1L);
+        lenient().when(userService.getUserById(1L)).thenReturn(userDto);
 
         // Act
         var result = authService.me();
@@ -267,31 +269,27 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("me should throw ResourceNotFoundException when authenticated user email not found in database")
+    @DisplayName("me should throw ResourceNotFoundException when authenticated user id not found in database")
     void me_shouldThrow_whenEmailNotFound() {
 
         // Arrange
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-        when(authentication.getName()).thenReturn("nonexistent@example.com");
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
-
-        when(userService.getUserByEmail("nonexistent@example.com"))
-                .thenThrow(new ResourceNotFoundException("User not found with email: nonexistent@example.com"));
+        lenient().when(currentUserProvider.getCurrentUserId()).thenReturn(999L);
+        lenient().when(userService.getUserById(999L))
+                .thenThrow(new ResourceNotFoundException("User not found with id: 999"));
 
         // Act & Assert
         assertThatThrownBy(() -> authService.me())
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("User not found with email: nonexistent@example.com");
+                .hasMessageContaining("User not found with id: 999");
     }
 
     @Test
     @DisplayName("me should throw NotAuthenticatedException when authentication is null")
     void me_shouldThrowNotAuthenticated_whenAuthenticationIsNull() {
 
-        // Arrange — no authentication set
-        SecurityContextHolder.clearContext();
+        // Arrange
+        lenient().when(currentUserProvider.getCurrentUserId())
+                .thenThrow(new NotAuthenticatedException("Not authenticated"));
 
         // Act & Assert
         assertThatThrownBy(() -> authService.me())

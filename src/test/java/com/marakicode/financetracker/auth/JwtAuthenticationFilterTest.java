@@ -4,6 +4,7 @@ import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,11 @@ class JwtAuthenticationFilterTest {
     void setUp() {
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
+        SecurityContextHolder.clearContext();
+    }
+
+    @AfterEach
+    void tearDown() {
         SecurityContextHolder.clearContext();
     }
 

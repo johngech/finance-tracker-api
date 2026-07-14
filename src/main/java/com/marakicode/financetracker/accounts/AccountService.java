@@ -8,7 +8,7 @@ import com.marakicode.financetracker.common.CurrentUserProvider;
 import com.marakicode.financetracker.common.DuplicateResourceException;
 import com.marakicode.financetracker.common.PagedResponse;
 import com.marakicode.financetracker.common.ResourceNotFoundException;
-import com.marakicode.financetracker.users.UserRepository;
+import com.marakicode.financetracker.users.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -27,7 +27,7 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final AccountTypeRepository accountTypeRepository;
     private final CurrentUserProvider currentUserProvider;
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final AccountMapper accountMapper;
 
     @Transactional
@@ -35,7 +35,7 @@ public class AccountService {
         Long userId = currentUserProvider.getCurrentUserId();
         validateUniqueName(userId, request.name());
         Account account = accountMapper.toEntity(request);
-        account.setUser(userRepository.getReferenceById(userId));
+        account.setUser(userService.getReferenceById(userId));
         account.setBalance(request.initialBalance());
         account.setType(resolveType(request.type()));
         Account saved = accountRepository.save(account);

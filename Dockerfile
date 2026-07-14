@@ -17,11 +17,11 @@ WORKDIR /build
 # which are unused in Docker (tests run in CI and pre-commit hooks).
 # This cuts initial dependency download by ~40%.
 COPY pom.xml .
-RUN mvn -B -q dependency:go-offline -DexcludeScope=test
+#RUN mvn -B -q dependency:go-offline -DexcludeScope=test
 
 # Build the fat JAR and rename to a deterministic filename.
 COPY src ./src
-RUN mvn -B -q package -DskipTests \
+RUN mvn -B  package -DskipTests \
     && mv target/financetracker-*.jar target/app.jar
 
 # ── Stage 2: Runtime ───────────────────────────────────────────
