@@ -5,8 +5,8 @@
 ### A Production-Grade Personal Finance Management API
 
 ![Java](https://img.shields.io/badge/Java-17-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5-6DB33F?style=flat-square&logo=springboot&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.16-6DB33F?style=flat-square&logo=springboot&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Tests](https://img.shields.io/badge/Tests-333+-blue?style=flat-square&logo=junit5&logoColor=white)
 
@@ -55,17 +55,17 @@ FinanceTracker is a **stateless REST API** that enables users to manage their pe
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Framework** | Spring Boot 3.5 | Application bootstrap, auto-configuration, dependency injection |
-| **Language** | Java 17 | LTS version with records, sealed classes, pattern matching |
+| **Framework** | Spring Boot 3.5.16 | Application bootstrap, auto-configuration, dependency injection |
+| **Language** | Java 17 | LTS version with records for immutable DTOs |
 | **Security** | Spring Security 6.5 | Stateless JWT authentication, method-level security (`@PreAuthorize`) |
 | **Persistence** | Spring Data JPA + Hibernate | ORM, entity management, specification-based dynamic queries |
-| **Database** | PostgreSQL 16 | Production relational database with JSONB, CTEs, window functions |
+| **Database** | PostgreSQL | Production relational database with strong analytical query capabilities |
 | **Migrations** | Flyway | Version-controlled, repeatable database schema evolution |
 | **Mapping** | MapStruct 1.6.3 | Compile-time-safe entity ↔ DTO mapping (zero reflection overhead) |
-| **Boilerplate** | Lombok | `@RequiredArgsConstructor` injection, `@Getter`/`@Setter`, `@Builder` |
+| **Boilerplate** | Lombok | `@RequiredArgsConstructor` injection, `@Getter`/`@Setter` |
 | **Validation** | Jakarta Bean Validation | Declarative request validation via annotations |
 | **JWT** | jjwt 0.12.7 | Token generation, parsing, and cryptographic validation |
-| **API Docs** | SpringDoc OpenAPI 2.8 | Swagger UI at `/swagger-ui.html`, auto-generated from annotations |
+| **API Docs** | SpringDoc OpenAPI 2.8.17 | Swagger UI at `/swagger-ui.html`, auto-generated from annotations |
 | **Monitoring** | Spring Actuator | Health checks, metrics, and application info endpoints |
 | **Testing** | JUnit 5 + Mockito + MockMvc | Unit, integration, and slice tests |
 | **Static Analysis** | SpotBugs + FindSecBugs | Automated security vulnerability detection in CI |
@@ -79,85 +79,65 @@ FinanceTracker is a **stateless REST API** that enables users to manage their pe
 
 ```mermaid
 graph TB
-    subgraph "Client Layer"
-        CLIENT["🌐 REST Client<br/>(Swagger UI / Postman / Frontend)"]
+    CLIENT["REST Client"]
+    CLIENT --> CTRL["Controllers"]
+
+    subgraph CTRL ["API Layer"]
+        direction LR
+        AC["AuthController"]
+        UC["UserController"]
+        ACC["AccountController"]
+        TC["TransactionController"]
+        RC["ReportsController"]
+        ADC["Admin Controllers x4"]
     end
 
-    subgraph "API Layer"
-        subgraph "Controllers"
-            AUTH_C["AuthController"]
-            USER_C["UserController"]
-            ACCOUNT_C["AccountController"]
-            TXN_C["TransactionController"]
-            REPORT_C["ReportsController"]
-            ADMIN_C["AdminController"]
-        end
+    subgraph SVC ["Business Layer"]
+        direction LR
+        AS["AuthService"]
+        US["UserService"]
+        ACS["AccountService"]
+        TS["TransactionService"]
+        RS["ReportsService"]
+        ADS["Admin Services x4"]
     end
 
-    subgraph "Business Layer"
-        subgraph "Services"
-            AUTH_S["AuthService"]
-            USER_S["UserService"]
-            ACCOUNT_S["AccountService"]
-            TXN_S["TransactionService"]
-            REPORT_S["ReportsService"]
-            ADMIN_S["AdminDashboardService"]
-        end
-        subgraph "Facades"
-            USERS_F["UsersFacade"]
-            ACCOUNTS_F["AccountsFacade"]
-            TXN_F["TransactionsFacade"]
-            REPORTS_F["ReportsFacade"]
-        end
+    subgraph FCD ["Facade Layer"]
+        direction LR
+        UF["UsersFacade"]
+        AF["AccountsFacade"]
+        TF["TransactionsFacade"]
+        RF["ReportsFacade"]
     end
 
-    subgraph "Data Layer"
-        subgraph "Repositories"
-            USER_R["UserRepository"]
-            ACCOUNT_R["AccountRepository"]
-            TXN_R["TransactionRepository"]
-            REPORT_R["ReportsRepository"]
-        end
+    subgraph REPO ["Data Layer"]
+        direction LR
+        UR["UserRepository"]
+        ACR["AccountRepository"]
+        TR["TransactionRepository"]
+        RR["ReportsRepository"]
     end
 
-    subgraph "Infrastructure"
-        DB[("🐘 PostgreSQL")]
-        FLYWAY["Flyway Migrations<br/>V1 → V10"]
-        JWT_SVC["JwtService"]
-        SEC_CFG["SecurityConfig"]
+    subgraph INFRA ["Infrastructure"]
+        direction LR
+        DB[("PostgreSQL")]
+        FW["Flyway Migrations"]
+        JWT["JwtService"]
     end
 
-    CLIENT --> AUTH_C & USER_C & ACCOUNT_C & TXN_C & REPORT_C & ADMIN_C
-    AUTH_C --> AUTH_S
-    USER_C --> USER_S
-    ACCOUNT_C --> ACCOUNT_S
-    TXN_C --> TXN_S
-    REPORT_C --> REPORT_S
-    ADMIN_C --> ADMIN_S
-
-    AUTH_S --> JWT_SVC & USER_R
-    USER_S --> USER_R
-    ACCOUNT_S --> ACCOUNT_R
-    TXN_S --> TXN_R & ACCOUNT_R
-    REPORT_S --> REPORT_R
-    ADMIN_S --> USERS_F & ACCOUNTS_F & TXN_F
-
-    USER_R & ACCOUNT_R & TXN_R & REPORT_R --> DB
-    FLYWAY -.-> DB
-    SEC_CFG --> JWT_SVC
+    CTRL --> SVC
+    ADC --> ADS
+    ADS --> FCD
+    SVC --> REPO
+    REPO --> DB
+    FW -.-> DB
 ```
 
 ### Layered Responsibility Model
 
 ```mermaid
 graph LR
-    subgraph "🎯 Design Principles Applied"
-        A["Controllers<br/>━━━━━━━━━━<br/>• HTTP routing<br/>• Request validation<br/>• Response wrapping<br/>• Swagger docs"]
-        B["Services<br/>━━━━━━━━━━<br/>• Business logic<br/>• Transaction boundaries<br/>• Balance reconciliation<br/>• Ownership enforcement"]
-        C["Repositories<br/>━━━━━━━━━━<br/>• JPA data access<br/>• Specification queries<br/>• Native SQL aggregations<br/>• Entity graphs"]
-        D["Database<br/>━━━━━━━━━━<br/>• FK constraints<br/>• Unique indexes<br/>• CHECK constraints<br/>• Cascade deletes"]
-    end
-    A --> B --> C --> D
+    A["Controllers<br/>---<br/>HTTP routing<br/>Request validation<br/>Response wrapping<br/>Swagger docs"] --> B["Services<br/>---<br/>Business logic<br/>Transaction boundaries<br/>Balance reconciliation<br/>Ownership enforcement"] --> C["Repositories<br/>---<br/>JPA data access<br/>Specification queries<br/>Native SQL aggregations<br/>Entity graphs"] --> D["Database<br/>---<br/>FK constraints<br/>Unique indexes<br/>CHECK constraints<br/>Cascade deletes"]
 
     style A fill:#e3f2fd,stroke:#1565c0
     style B fill:#e8f5e9,stroke:#2e7d32
@@ -169,18 +149,18 @@ graph LR
 
 ```mermaid
 graph TB
-    REQ["HTTP Request"] --> FILTER["JwtAuthenticationFilter<br/><i>OncePerRequestFilter</i>"]
+    REQ["HTTP Request"] --> FILTER["JwtAuthenticationFilter"]
     FILTER -->|"Extract Bearer token"| JWT_SVC["JwtService.parseToken()"]
     JWT_SVC -->|"Returns Jwt value object"| LOAD["Load User by ID"]
-    LOAD -->|"Set SecurityContext"| AUTH_MGR["AuthenticationManager"]
-    AUTH_MGR --> CHAIN["SecurityFilterChain"]
+    LOAD -->|"Set SecurityContext"| CHAIN["SecurityFilterChain"]
     CHAIN --> RULES["SecurityRules Collection"]
-    RULES --> AUTH_RULES["AuthSecurityRules<br/>/auth/** permitAll"]
-    RULES --> USER_RULES["UserSecurityRules<br/>/users/** authenticated"]
-    RULES --> ACCOUNT_RULES["AccountSecurityRules<br/>/accounts/** authenticated"]
-    RULES --> TXN_RULES["TransactionSecurityRules<br/>/transactions/** authenticated"]
-    RULES --> ADMIN_RULES["AdminSecurityRules<br/>/admin/** ROLE_ADMIN"]
-    RULES --> ACTUATOR_RULES["ActuatorSecurityRules<br/>/actuator/** permitAll"]
+    RULES --> AUTH_R["AuthSecurityRules: /auth/** permitAll"]
+    RULES --> USER_R["UserSecurityRules: /users/** authenticated"]
+    RULES --> ACCOUNT_R["AccountSecurityRules: /accounts/** authenticated"]
+    RULES --> TXN_R["TransactionSecurityRules: /transactions/** authenticated"]
+    RULES --> ADMIN_R["AdminSecurityRules: /admin/** ROLE_ADMIN"]
+    RULES --> ACTUATOR_R["ActuatorSecurityRules: /actuator/health,/info permitAll"]
+    RULES --> OPENAPI_R["OpenApiSecurityRules: /swagger-ui/** permitAll (non-prod)"]
     CHAIN --> CATCH_ALL["anyRequest().authenticated()"]
     CHAIN --> CONTROLLER["RestController"]
 
@@ -189,7 +169,7 @@ graph TB
     style CHAIN fill:#f3e5f5,stroke:#7b1fa2
 ```
 
-> **Key Insight**: Each bounded context provides its own `SecurityRules` implementation. `SecurityConfig` collects all beans and applies them dynamically — no monolithic URL-matching configuration.
+> **Key Insight**: Each bounded context provides its own `SecurityRules` implementation. `SecurityConfig` collects all beans and applies them dynamically — no monolithic URL-matching configuration. The `JwtAuthenticationFilter` authenticates requests by parsing the JWT and setting the `SecurityContext` directly (no `AuthenticationManager` involved). `AuthenticationManager` is only used during `POST /auth/login` for username/password authentication.
 
 ---
 
@@ -212,6 +192,8 @@ com.marakicode.financetracker/
 │   ├── EmailNormalizer.java         # Case-insensitive email normalization
 │   ├── SearchUtils.java             # LIKE wildcard escaping (LIKE injection prevention)
 │   ├── OpenApiConfig.java           # Swagger UI configuration
+│   ├── OpenApiSecurityRules.java    # Swagger/OpenAPI access (non-prod only)
+│   ├── ActuatorSecurityRules.java   # /actuator/health, /info permitAll; rest authenticated
 │   └── RequestLoggingFilter.java    # HTTP request/response logging
 │
 ├── auth/                            # Authentication & Authorization
@@ -224,7 +206,11 @@ com.marakicode.financetracker/
 │   ├── AuthService.java             # Orchestrates login/register/refresh/logout
 │   ├── AuthController.java          # POST /login, /register, /refresh, /logout; GET /me
 │   ├── AuthSecurityRules.java       # permitAll for /auth/**
-│   └── ...                          # DTOs, exceptions, CORS config
+│   ├── CorsProperties.java          # Externalized CORS config via app.cors.* properties
+│   ├── UserDetailsServiceImpl.java  # Loads user by email for Spring Security
+│   ├── AuthCurrentUserProvider.java # CurrentUserProvider implementation via SecurityContext
+│   ├── AuthExceptionHandler.java    # Handles InvalidJwtAuthenticationException, BadCredentialsException
+│   └── dto/                         # LoginRequest, RegisterRequest, JwtResponse, etc.
 │
 ├── users/                           # User management
 │   ├── User.java                    # @Entity: firstName, lastName, email, passwordHash, role, active
@@ -233,7 +219,14 @@ com.marakicode.financetracker/
 │   ├── UserService.java             # CRUD + password change + ownership enforcement
 │   ├── UserController.java          # REST endpoints with @PreAuthorize ownership checks
 │   ├── UserMapper.java              # MapStruct: User ↔ UserDto/UserCreateRequest
-│   ├── UsersFacade.java             # Interface for cross-domain statistics
+│   ├── UserSecurityRules.java       # Ownership-based access: users can view/edit own profile
+│   ├── UserExceptionHandler.java    # Handles PasswordMismatchException, LastAdminActionException
+│   ├── UsersFacade.java             # Interface for cross-domain operations and statistics
+│   ├── UsersFacadeImpl.java         # Facade implementation delegating to UserService
+│   ├── AdminInitializer.java        # Seeds default admin user on startup
+│   ├── exceptions/
+│   │   ├── PasswordMismatchException.java
+│   │   └── LastAdminActionException.java
 │   └── dto/                         # UserDto, UserCreateRequest, UserUpdateRequest, etc.
 │
 ├── accounts/                        # Account management
@@ -244,34 +237,54 @@ com.marakicode.financetracker/
 │   ├── AccountService.java          # CRUD + balance initialization + ownership enforcement
 │   ├── AccountSpecification.java    # JPA Specifications: nameContains, typeEquals, currencyEquals
 │   ├── AccountController.java       # REST endpoints with filtering and pagination
-│   ├── AccountsFacade.java          # Interface for cross-domain statistics
+│   ├── AccountSecurityRules.java    # Ownership-based access for account operations
+│   ├── AccountExceptionHandler.java # Handles AccountTypeNotFoundException
+│   ├── AccountTypeNotFoundException.java
+│   ├── AccountsFacade.java          # Interface for cross-domain operations and statistics
+│   ├── AccountsFacadeImpl.java      # Facade implementation delegating to AccountService
 │   └── dto/                         # AccountCreateRequest, AccountResponse, etc.
 │
 ├── transactions/                    # Transaction tracking
 │   ├── Transaction.java             # @Entity: account (FK), type (FK), amount, category (FK), date
 │   ├── TransactionType.java         # Enum: INCOME, EXPENSE
 │   ├── TransactionTypeEntity.java   # Reference table entity (3NF)
+│   ├── TransactionTypeRepository.java
 │   ├── TransactionCategoryEntity.java # Dynamic category entity (find-or-create)
+│   ├── TransactionCategoryRepository.java # Native INSERT ON CONFLICT for atomic creation
 │   ├── TransactionRepository.java   # JpaRepository + Specifications
 │   ├── TransactionService.java      # CRUD + balance reconciliation + insufficient funds check
+│   ├── TransactionMapper.java       # MapStruct: entity ↔ DTO with @Named methods
 │   ├── TransactionSpecification.java # Dynamic filtering: account, type, category, date range
 │   ├── TransactionController.java   # REST endpoints with rich filtering
-│   ├── TransactionsFacade.java      # Interface for cross-domain statistics
+│   ├── TransactionSecurityRules.java # Ownership-based access via account ownership
+│   ├── TransactionExceptionHandler.java # Handles InsufficientFundsException, AccountFrozenException
+│   ├── InsufficientFundsException.java
+│   ├── AccountFrozenException.java
+│   ├── TransactionsFacade.java      # Interface for cross-domain operations and statistics
+│   ├── TransactionsFacadeImpl.java  # Facade implementation delegating to TransactionService
 │   └── dto/                         # TransactionCreateRequest, TransactionResponse, etc.
 │
 ├── reports/                         # Financial reporting (read-only aggregation)
 │   ├── ReportsRepository.java       # Native SQL: SUM, COUNT, GROUP BY, CASE, COALESCE
-│   ├── ReportsService.java          # Orchestrates queries, maps Object[] → DTOs
+│   ├── ReportsService.java          # Orchestrates queries, maps results to DTOs
+│   ├── ReportsMapper.java           # Maps Object[] → DTOs, computes category percentages
 │   ├── ReportsController.java       # 4 GET endpoints: summary, category, monthly, account
+│   ├── ReportsSecurityRules.java    # Authentication enforced via catch-all
 │   ├── ReportsFacade.java           # Interface for admin dashboard
+│   ├── ReportsFacadeImpl.java       # Facade implementation for system-wide reports
 │   └── dto/                         # SummaryResponse, CategoryBreakdownResponse, etc.
 │
 ├── admin/                           # Admin-only operations
+│   ├── AdminSecurityRules.java      # /admin/** requires ROLE_ADMIN
 │   ├── AdminUserController.java     # Suspend/activate users, reset passwords, update roles
+│   ├── AdminUserService.java        # Business logic for admin user operations
 │   ├── AdminAccountController.java  # Freeze/unfreeze accounts
+│   ├── AdminAccountService.java     # Business logic for admin account operations
 │   ├── AdminTransactionController.java # View all transactions (read-only)
+│   ├── AdminTransactionService.java # Business logic for admin transaction operations
 │   ├── AdminDashboardController.java # Platform-wide statistics
-│   └── dto/                         # DashboardResponse, RoleUpdateRequest, etc.
+│   ├── AdminDashboardService.java   # Aggregates statistics across all domains via Facades
+│   └── dto/                         # DashboardResponse, RoleUpdateRequest, PasswordResetResponse
 │
 └── FinancetrackerApplication.java   # @SpringBootApplication entry point
 ```
@@ -288,49 +301,49 @@ erDiagram
         bigserial id PK
         varchar first_name
         varchar last_name
-        varchar email UK "case-insensitive UNIQUE via LOWER()"
+        varchar email UK "case-insensitive UNIQUE via LOWER"
         varchar password_hash
-        varchar role "USER | ADMIN"
-        boolean active "default: true"
+        varchar role "USER or ADMIN"
+        boolean active "default true"
         timestamptz created_at
         timestamptz updated_at
     }
 
     ACCOUNT_TYPES {
         bigserial id PK
-        varchar name UK "CHECKING | SAVINGS | INVESTMENT"
+        varchar name UK "CHECKING SAVINGS INVESTMENT"
     }
 
     ACCOUNTS {
         bigserial id PK
-        bigint user_id FK "→ users.id ON DELETE CASCADE"
+        bigint user_id FK "users.id ON DELETE CASCADE"
         varchar name
-        varchar type FK "→ account_types.name"
-        decimal balance "CHECK (balance >= 0)"
+        varchar type FK "account_types.name"
+        decimal balance "CHECK balance >= 0"
         varchar currency "ISO 4217, default USD"
-        boolean frozen "default: false"
+        boolean frozen "default false"
         created_at created_at
         updated_at updated_at
     }
 
     TRANSACTION_TYPES {
         bigserial id PK
-        varchar name UK "INCOME | EXPENSE"
+        varchar name UK "INCOME EXPENSE"
     }
 
     TRANSACTION_CATEGORIES {
         bigserial id PK
-        varchar name UK "dynamic: find-or-create"
+        varchar name UK "dynamic find-or-create"
     }
 
     TRANSACTIONS {
         bigserial id PK
-        bigint account_id FK "→ accounts.id ON DELETE CASCADE"
-        varchar type FK "→ transaction_types.name"
-        decimal amount "CHECK (amount > 0)"
+        bigint account_id FK "accounts.id ON DELETE CASCADE"
+        varchar type FK "transaction_types.name"
+        decimal amount "CHECK amount > 0"
         varchar description
-        date transaction_date "default: CURRENT_DATE"
-        varchar category FK "→ transaction_categories.name (nullable)"
+        date transaction_date "default CURRENT_DATE"
+        varchar category FK "transaction_categories.name nullable"
         created_at created_at
         updated_at updated_at
     }
@@ -377,30 +390,30 @@ sequenceDiagram
     participant AS as AuthService
     participant JS as JwtService
     participant DB as Database
-    participant SEC as SecurityContext
+    participant SF as SecurityFilter
 
-    Note over C,SEC: ──── Login Flow ────
-    C->>AC: POST /api/v1/auth/login<br/>{email, password}
+    Note over C,SF: Login Flow
+    C->>AC: POST /api/v1/auth/login {email, password}
     AC->>AS: login(request, response)
-    AS->>DB: Authenticate (email + BCrypt)
+    AS->>DB: Authenticate email + BCrypt
     AS->>JS: generateAccessToken(user)
-    JS-->>AS: Jwt (access, 15min)
+    JS-->>AS: Jwt access token (15min)
     AS->>JS: generateRefreshToken(user)
-    JS-->>AS: Jwt (refresh, 7days)
+    JS-->>AS: Jwt refresh token (7 days)
     AS->>AS: Set refreshToken cookie (HttpOnly, SameSite=Lax)
     AS-->>AC: JwtResponse {accessToken}
-    AC-->>C: 200 {success, message, data: {accessToken}}
+    AC-->>C: 200 OK with accessToken
 
-    Note over C,SEC: ──── Authenticated Request ────
-    C->>AC: GET /api/v1/transactions<br/>Authorization: Bearer &lt;token&gt;
-    AC->>SEC: JwtAuthenticationFilter
-    SEC->>JS: parseToken(token)
-    JS-->>SEC: Jwt {userId, email, role, type}
-    SEC->>DB: Load User by ID
-    SEC->>SEC: Set SecurityContext (UserIdPrincipal)
-    SEC->>AC: Proceed to controller
+    Note over C,SF: Authenticated Request
+    C->>AC: GET /api/v1/transactions
+    AC->>SF: JwtAuthenticationFilter intercepts
+    SF->>JS: parseToken(token)
+    JS-->>SF: Jwt {userId, email, role, type}
+    SF->>DB: Load User by ID from JWT claims
+    SF->>SF: Set SecurityContext (UserIdPrincipal)
+    SF-->>AC: Authenticated request proceeds
     AC->>AC: @PreAuthorize ownership check
-    AC-->>C: 200 {success, data: [...]}
+    AC-->>C: 200 OK with transaction data
 ```
 
 ### Security Controls
@@ -494,6 +507,45 @@ sequenceDiagram
 | `GET` | `/transactions` | `ADMIN` | List all transactions with search |
 | `GET` | `/transactions/{id}` | `ADMIN` | Get any transaction by ID |
 
+### Error Response Format
+
+All errors return a consistent `ErrorDto` structure:
+
+```json
+{
+  "timestamp": "2025-01-15T10:30:00",
+  "status": 400,
+  "error": "Validation Failed",
+  "message": "Request validation failed",
+  "path": "/api/v1/users",
+  "fieldErrors": [
+    { "field": "email", "message": "must be a well-formed email address" }
+  ]
+}
+```
+
+| Exception | HTTP Status | Scenario |
+|-----------|:-----------:|----------|
+| `MethodArgumentNotValidException` | 400 | Jakarta validation failures (missing fields, bad format) |
+| `HttpMessageNotReadableException` | 400 | Malformed JSON or invalid enum value |
+| `MissingServletRequestParameterException` | 400 | Missing required query parameter (e.g., `year`) |
+| `MethodArgumentTypeMismatchException` | 400 | Path parameter type mismatch (e.g., string for Long) |
+| `InsufficientFundsException` | 400 | EXPENSE transaction exceeds account balance |
+| `AccountFrozenException` | 400 | Transaction on a frozen account |
+| `PasswordMismatchException` | 400 | Current password verification failed |
+| `ResourceNotFoundException` | 404 | Entity not found by ID |
+| `DuplicateResourceException` | 409 | Unique constraint violation (e.g., duplicate email) |
+| `AccessDeniedException` | 403 | Ownership check failed or missing ROLE_ADMIN |
+| `DisabledException` | 401 | Suspended user account |
+| `InvalidJwtAuthenticationException` | 401 | Invalid or expired JWT token |
+
+### Business Rules
+
+- **Last Admin Protection**: The last active admin cannot be suspended, demoted, or deleted (`LastAdminActionException`)
+- **Account Freeze**: Frozen accounts reject new transactions (`AccountFrozenException`)
+- **Balance Integrity**: EXPENSE transactions check sufficient funds before recording
+- **Ownership Enforcement**: Users can only access their own accounts, transactions, and profile — enforced via `@PreAuthorize` with `UserIdPrincipal`
+
 ---
 
 ## ✨ Code Quality & Patterns
@@ -502,7 +554,7 @@ sequenceDiagram
 
 | Pattern | Where | Why |
 |---------|-------|-----|
-| **CQRS** | Services split into commands (write) and queries (read) via `@Transactional` vs `@Transactional(readOnly=true)` | Clear separation of read/write concerns |
+| **Read/Write Separation** | `@Transactional` (write) vs `@Transactional(readOnly=true)` (read) across all services | Semantic clarity, optimistic locking optimization |
 | **Facade** | `UsersFacade`, `AccountsFacade`, `TransactionsFacade`, `ReportsFacade` | Decouple admin domain from user domain internals |
 | **Specification** | `AccountSpecification`, `TransactionSpecification` | Dynamic query composition without query explosion |
 | **Strategy** | `SecurityRules` functional interface — each domain provides its own | Modular, pluggable security configuration |
@@ -518,8 +570,8 @@ sequenceDiagram
 |-----------|----------|
 | **S — Single Responsibility** | Each service handles one domain; each controller handles one resource; each exception maps to one HTTP status |
 | **O — Open/Closed** | `SecurityRules` interface allows new domains without modifying `SecurityConfig`; `Specification` pattern allows new filters without modifying repositories |
-| **L — Liskov Substitution** | `Jwt` wraps any `Claims` implementation; `SecurityRules` implementations are interchangeable |
-| **I — Interface Segregation** | `SecurityRules` is a single-method functional interface; `UsersFacade`/`AccountsFacade` expose only statistics methods |
+| **L — Liskov Substitution** | `SecurityRules` implementations (`AuthSecurityRules`, `UserSecurityRules`, etc.) are interchangeable — any implementation can be substituted without affecting `SecurityConfig` |
+| **I — Interface Segregation** | `SecurityRules` is a single-method functional interface; facade interfaces provide focused cross-domain APIs without exposing repository internals |
 | **D — Dependency Inversion** | Services depend on repository interfaces (JpaRepository); controllers depend on service abstractions; `CurrentUserProvider` abstracts auth extraction |
 
 ---
@@ -530,12 +582,10 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    subgraph "📊 Test Distribution"
-        UNIT["🔬 Unit Tests<br/>━━━━━━━━━━<br/>@ExtendWith(MockitoExtension.class)<br/>UserServiceTest (17)<br/>AuthServiceTest (10)<br/>JwtServiceTest (13)<br/>TransactionServiceTest (25)<br/>AccountServiceTest (14)<br/>ReportsServiceTest (10)<br/>AdminUserServiceTest, etc."]
-        SLICE["🧩 Slice Tests<br/>━━━━━━━━━━<br/>@WebMvcTest + MockedBeans<br/>UserControllerTest (14)<br/>AuthControllerTest (10)<br/>TransactionControllerTest (19)<br/>AccountControllerTest (18)<br/>ReportsControllerTest (11)<br/>Admin*ControllerTest (6)"]
-        INTEG["🔗 Integration Tests<br/>━━━━━━━━━━<br/>@DataJpaTest (H2)<br/>UserRepositoryTest (6)<br/>AccountRepositoryTest (8)<br/>TransactionRepositoryTest (12)<br/>ReportsRepositoryTest (10)<br/>TransactionCategoryRepositoryTest (3)"]
-        E2E["🌐 E2E Tests<br/>━━━━━━━━━━<br/>@SpringBootTest<br/>SecurityConfigTest (12)<br/>FinancetrackerApplicationTests (1)"]
-    end
+    UNIT["Unit Tests<br/>---<br/>@ExtendWith(MockitoExtension.class)<br/>Services, JwtService, Auth, Filters"]
+    SLICE["Slice Tests<br/>---<br/>@WebMvcTest + MockedBeans<br/>All Controllers"]
+    INTEG["Integration Tests<br/>---<br/>@DataJpaTest H2<br/>All Repositories"]
+    E2E["E2E Tests<br/>---<br/>@SpringBootTest<br/>SecurityConfigTest"]
 
     UNIT --> SLICE --> INTEG --> E2E
 
@@ -564,38 +614,30 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph "🔀 Trigger"
-        PUSH["Push to main"]
-        PR["Pull Request"]
-    end
+    PUSH["Push to main"] --> BUILD["Build and Test"]
+    PUSH --> GITLEAKS["Gitleaks Secret Scan"]
+    PUSH --> SPOTBUGS["SpotBugs FindSecBugs"]
+    PUSH --> DOCKER["Docker Build"]
 
-    subgraph "⚡ Jobs"
-        BUILD["🔨 Build & Test<br/>━━━━━━━━━━<br/>mvn compile<br/>mvn test<br/>Upload Surefire reports"]
-        GITLEAKS["🔐 Gitleaks<br/>━━━━━━━━━━<br/>Full-history secret scan<br/>fetch-depth: 0"]
-        SPOTBUGS["🐛 SpotBugs<br/>━━━━━━━━━━<br/>FindSecBugs analysis<br/>Security vulnerability scan"]
-    end
+    PR["Pull Request"] --> BUILD
+    PR --> GITLEAKS
+    PR --> DOCKER
 
-    subgraph "📦 Artifacts"
-        REPORTS["Surefire Reports<br/>(14-day retention)"]
-        SB_REPORT["SpotBugs Report<br/>(14-day retention)"]
-    end
-
-    PUSH --> BUILD & GITLEAKS & SPOTBUGS
-    PR --> BUILD & GITLEAKS
-    BUILD --> REPORTS
-    SPOTBUGS --> SB_REPORT
+    BUILD --> REPORTS["Surefire Reports 14-day"]
+    SPOTBUGS --> SB_REPORT["SpotBugs Report 14-day"]
 
     style BUILD fill:#e8f5e9,stroke:#2e7d32
     style GITLEAKS fill:#fff9c4,stroke:#f9a825
     style SPOTBUGS fill:#fce4ec,stroke:#c62828
+    style DOCKER fill:#e1f5fe,stroke:#0288d1
 ```
 
 ### Pipeline Behavior
 
-| Event | Build & Test | Gitleaks | SpotBugs |
-|-------|:------------:|:--------:|:--------:|
-| **PR to main** | ✅ | ✅ | ❌ |
-| **Push to main** | ✅ | ✅ | ✅ |
+| Event | Build & Test | Gitleaks | SpotBugs | Docker Build |
+|-------|:------------:|:--------:|:--------:|:------------:|
+| **PR to main** | ✅ | ✅ | ❌ | ✅ |
+| **Push to main** | ✅ | ✅ | ✅ | ✅ |
 
 ### Local Git Hooks
 
@@ -612,7 +654,7 @@ graph LR
 
 - **Java 17** (`sdk use java 17.0.8-tem`)
 - **Maven 3.9+**
-- **PostgreSQL 16** (or use Docker)
+- **PostgreSQL** (or use Docker)
 - **Gitleaks** (for git hooks)
 
 ### Quick Start
