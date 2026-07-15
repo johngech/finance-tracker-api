@@ -61,8 +61,7 @@ class TransactionControllerTest {
     @DisplayName("createTransaction_shouldReturn201_withData - POST with valid body returns 201 with transaction data")
     void createTransaction_shouldReturn201_withData() throws Exception {
         // Arrange
-        var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
-                new BigDecimal("100.00"), "Test description", LocalDate.of(2026, 1, 15), "Salary");
+        var request = new TransactionCreateRequest(1L, TransactionType.INCOME, new BigDecimal("100.00"), "Test description", "Salary");
         var response = createTestResponse();
         when(transactionService.createTransaction(any(TransactionCreateRequest.class))).thenReturn(response);
 
@@ -101,8 +100,7 @@ class TransactionControllerTest {
                 .andExpect(jsonPath("$.fieldErrors").isArray())
                 .andExpect(jsonPath("$.fieldErrors[?(@.field == 'accountId')]").exists())
                 .andExpect(jsonPath("$.fieldErrors[?(@.field == 'type')]").exists())
-                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'amount')]").exists())
-                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'transactionDate')]").exists());
+                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'amount')]").exists());
     }
 
     @Test
@@ -110,7 +108,7 @@ class TransactionControllerTest {
     void createTransaction_shouldReturn400_withInsufficientFunds() throws Exception {
         // Arrange
         var request = new TransactionCreateRequest(1L, TransactionType.EXPENSE,
-                new BigDecimal("99999.00"), "BIG expense", LocalDate.of(2026, 1, 15), null);
+                new BigDecimal("99999.00"), "BIG expense", null);
         when(transactionService.createTransaction(any(TransactionCreateRequest.class)))
                 .thenThrow(new InsufficientFundsException("Insufficient funds. Current balance: 1000.00"));
 
@@ -201,8 +199,7 @@ class TransactionControllerTest {
     @DisplayName("updateTransaction_shouldReturn200_withUpdatedData - PATCH with valid body returns 200 with updated transaction")
     void updateTransaction_shouldReturn200_withUpdatedData() throws Exception {
         // Arrange
-        var request = new TransactionUpdateRequest(TransactionType.EXPENSE,
-                new BigDecimal("50.00"), "Updated description", LocalDate.of(2026, 2, 1), "Food");
+        var request = new TransactionUpdateRequest(TransactionType.EXPENSE, new BigDecimal("50.00"), "Updated description", "Food");
         var updatedResponse = new TransactionResponse(1L, 1L, "Test Account", TransactionType.EXPENSE,
                 new BigDecimal("50.00"), "Updated description", LocalDate.of(2026, 2, 1),
                 "Food", LocalDateTime.of(2026, 1, 15, 10, 0));
@@ -227,7 +224,7 @@ class TransactionControllerTest {
     void updateTransaction_shouldReturn404_whenNotFound() throws Exception {
         // Arrange
         var request = new TransactionUpdateRequest(TransactionType.EXPENSE,
-                new BigDecimal("50.00"), null, null, null);
+                new BigDecimal("50.00"), null, null);
         when(transactionService.updateTransaction(eq(999L), any(TransactionUpdateRequest.class)))
                 .thenThrow(new ResourceNotFoundException("Transaction not found with id: 999"));
 
@@ -295,7 +292,7 @@ class TransactionControllerTest {
     @DisplayName("updateTransaction_shouldReturn405_whenUsingPut - PUT not allowed, only PATCH supported")
     void updateTransaction_shouldReturn405_whenUsingPut() throws Exception {
         var request = new TransactionUpdateRequest(TransactionType.EXPENSE,
-                new BigDecimal("50.00"), null, null, null);
+                new BigDecimal("50.00"), null, null);
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .put("/api/v1/transactions/1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -307,7 +304,7 @@ class TransactionControllerTest {
     @DisplayName("updateTransaction_shouldReturn400_withInsufficientFunds - PATCH when funds insufficient returns 400")
     void updateTransaction_shouldReturn400_withInsufficientFunds() throws Exception {
         var request = new TransactionUpdateRequest(TransactionType.EXPENSE,
-                new BigDecimal("99999.00"), null, null, null);
+                new BigDecimal("99999.00"), null, null);
         when(transactionService.updateTransaction(eq(1L), any(TransactionUpdateRequest.class)))
                 .thenThrow(new InsufficientFundsException("Insufficient funds. Current balance: 1000.00"));
         mockMvc.perform(patch("/api/v1/transactions/1")
@@ -337,24 +334,6 @@ class TransactionControllerTest {
     }
 
     @Test
-    @DisplayName("createTransaction_shouldReturn400_withFutureDate - POST with future transactionDate returns 400")
-    void createTransaction_shouldReturn400_withFutureDate() throws Exception {
-        String body = """
-                {
-                    "accountId": 1,
-                    "type": "INCOME",
-                    "amount": 100.00,
-                    "transactionDate": "2099-01-01"
-                }
-                """;
-        mockMvc.perform(post("/api/v1/transactions")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'transactionDate')]").exists());
-    }
-
-    @Test
     @DisplayName("updateTransaction_shouldReturn400_withDecimalMinViolation - PATCH with amount below 0.01 returns 400")
     void updateTransaction_shouldReturn400_withDecimalMinViolation() throws Exception {
         String body = """
@@ -367,21 +346,6 @@ class TransactionControllerTest {
                         .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors[?(@.field == 'amount')]").exists());
-    }
-
-    @Test
-    @DisplayName("updateTransaction_shouldReturn400_withFutureDate - PATCH with future transactionDate returns 400")
-    void updateTransaction_shouldReturn400_withFutureDate() throws Exception {
-        String body = """
-                {
-                    "transactionDate": "2099-01-01"
-                }
-                """;
-        mockMvc.perform(patch("/api/v1/transactions/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'transactionDate')]").exists());
     }
 
     @Test

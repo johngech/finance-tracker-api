@@ -49,11 +49,11 @@ class ReportsServiceTest {
     @DisplayName("getSummary returns correct response - maps Object[] to SummaryResponse")
     void getSummary_returnsCorrectResponse() {
         // Arrange
-        Object[] mockResult = new Object[]{
+        var mockResult = List.<Object[]>of(new Object[]{
                 new BigDecimal("1500.00"),
                 new BigDecimal("700.00"),
                 10L
-        };
+        });
         when(reportsRepository.getSummaryByUserId(eq(1L), any(), any())).thenReturn(mockResult);
 
         // Act
@@ -71,9 +71,9 @@ class ReportsServiceTest {
     @DisplayName("getSummary with empty result returns zeros - zero transactions returns zeroed response")
     void getSummary_emptyResult_returnsZeros() {
         // Arrange
-        Object[] mockResult = new Object[]{
+        var mockResult = List.<Object[]>of(new Object[]{
                 BigDecimal.ZERO, BigDecimal.ZERO, 0L
-        };
+        });
         when(reportsRepository.getSummaryByUserId(eq(1L), any(), any())).thenReturn(mockResult);
 
         // Act
@@ -90,9 +90,9 @@ class ReportsServiceTest {
     @DisplayName("getSummary delegates to repository - passes userId and dates correctly")
     void getSummary_delegatesToRepository() {
         // Arrange
-        Object[] mockResult = new Object[]{
+        var mockResult = List.<Object[]>of(new Object[]{
                 BigDecimal.ZERO, BigDecimal.ZERO, 0L
-        };
+        });
         LocalDate from = LocalDate.of(2025, 7, 1);
         LocalDate to = LocalDate.of(2025, 7, 31);
         when(reportsRepository.getSummaryByUserId(1L, from, to)).thenReturn(mockResult);

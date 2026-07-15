@@ -105,6 +105,7 @@ public class TransactionService {
         if (request.category() != null) {
             transaction.setCategory(resolveCategory(request.category()));
         }
+        // transactionDate will be set automatically by @CreationTimestamp annotation
         return transaction;
     }
 
@@ -176,7 +177,6 @@ public class TransactionService {
         return request.type() == null
                 && request.amount() == null
                 && request.description() == null
-                && request.transactionDate() == null
                 && request.category() == null;
     }
 
@@ -184,7 +184,6 @@ public class TransactionService {
         if (request.type() != null) existing.setType(resolveType(request.type()));
         if (request.amount() != null) existing.setAmount(request.amount());
         if (request.description() != null) existing.setDescription(request.description());
-        if (request.transactionDate() != null) existing.setTransactionDate(request.transactionDate());
         if (request.category() != null) existing.setCategory(resolveCategory(request.category()));
     }
 

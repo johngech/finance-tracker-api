@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -23,8 +24,8 @@ public class ReportsService {
     @Transactional(readOnly = true)
     public SummaryResponse getSummary(LocalDate from, LocalDate to) {
         var userId = currentUserProvider.getCurrentUserId();
-        Object[] result = reportsRepository.getSummaryByUserId(userId, from, to);
-        return ReportsMapper.mapToSummary(result);
+        List<Object[]> results = reportsRepository.getSummaryByUserId(userId, from, to);
+        return ReportsMapper.mapToSummary(results.isEmpty() ? new Object[]{BigDecimal.ZERO, BigDecimal.ZERO, 0L} : results.get(0));
     }
 
     @Transactional(readOnly = true)

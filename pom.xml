@@ -29,9 +29,9 @@
     <properties>
         <java.version>17</java.version>
         <!-- Flyway Maven plugin defaults — override via CLI: -Dflyway.password=xxx -->
-        <flyway.url>jdbc:postgresql://localhost:5432/financetracker_dev</flyway.url>
+        <flyway.url>jdbc:postgresql://localhost:5432/financetracker</flyway.url>
         <flyway.user>postgres</flyway.user>
-        <flyway.password>changeme</flyway.password>
+        <flyway.password>MyP@ssword!123</flyway.password>
     </properties>
     <dependencies>
         <dependency>

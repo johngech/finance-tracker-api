@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -21,8 +22,8 @@ public class ReportsFacadeImpl implements ReportsFacade {
     @Override
     @Transactional(readOnly = true)
     public SummaryResponse getSystemSummary(LocalDate from, LocalDate to) {
-        Object[] result = reportsRepository.getSystemSummary(from, to);
-        return ReportsMapper.mapToSummary(result);
+        List<Object[]> results = reportsRepository.getSystemSummary(from, to);
+        return ReportsMapper.mapToSummary(results.isEmpty() ? new Object[]{BigDecimal.ZERO, BigDecimal.ZERO, 0L} : results.get(0));
     }
 
     @Override

@@ -39,11 +39,11 @@ class ReportsFacadeImplTest {
     @DisplayName("getSystemSummary with data returns correct totals")
     void getSystemSummary_withData_returnsCorrectTotals() {
         // Arrange
-        Object[] mockResult = new Object[]{
+        List<Object[]> mockResult = List.<Object[]>of(new Object[]{
                 new BigDecimal("5000.00"),
                 new BigDecimal("3200.00"),
                 25L
-        };
+        });
         LocalDate from = LocalDate.of(2025, 1, 1);
         LocalDate to = LocalDate.of(2025, 12, 31);
         when(reportsRepository.getSystemSummary(from, to)).thenReturn(mockResult);
@@ -63,9 +63,9 @@ class ReportsFacadeImplTest {
     @DisplayName("getSystemSummary with empty result returns zeros")
     void getSystemSummary_emptyResult_returnsZeros() {
         // Arrange
-        Object[] mockResult = new Object[]{
+        List<Object[]> mockResult = List.<Object[]>of(new Object[]{
                 BigDecimal.ZERO, BigDecimal.ZERO, 0L
-        };
+        });
         when(reportsRepository.getSystemSummary(null, null)).thenReturn(mockResult);
 
         // Act

@@ -358,6 +358,60 @@ class AccountControllerTest {
     }
 
     @Test
+    @DisplayName("getMyAccounts_shouldReturn200_withPagedResponse - GET /mine returns paginated accounts for authenticated user")
+    void getMyAccounts_shouldReturn200_withPagedResponse() throws Exception {
+        // Arrange
+        var accounts = List.of(sampleAccountResponse());
+        var pagedResponse = new PagedResponse<>(accounts, 0, 10, 1, 1);
+        when(accountService.getAccounts(any(), any(), any(), any())).thenReturn(pagedResponse);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/accounts/mine"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].name").value("Checking123"))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(10))
+                .andExpect(jsonPath("$.data.totalPages").value(1));
+    }
+
+    @Test
+    @DisplayName("getMyAccounts_shouldReturn200_withFilters - GET /mine with query params passes filters to service")
+    void getMyAccounts_shouldReturn200_withFilters() throws Exception {
+        // Arrange
+        var pagedResponse = new PagedResponse<AccountResponse>(List.of(), 0, 10, 0, 0);
+        when(accountService.getAccounts(any(), any(), any(), any())).thenReturn(pagedResponse);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/accounts/mine")
+                        .param("search", "Savings")
+                        .param("type", "SAVINGS")
+                        .param("currency", "EUR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.content.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("getMyAccounts_shouldReturn200_withEmptyResult - GET /mine with no accounts returns empty page")
+    void getMyAccounts_shouldReturn200_withEmptyResult() throws Exception {
+        // Arrange
+        var pagedResponse = new PagedResponse<AccountResponse>(List.of(), 0, 10, 0, 0);
+        when(accountService.getAccounts(any(), any(), any(), any())).thenReturn(pagedResponse);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/v1/accounts/mine"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.content.length()").value(0))
+                .andExpect(jsonPath("$.data.totalPages").value(0));
+    }
+
+    @Test
     @DisplayName("createAccount_shouldReturn400_withEmptyStringEnumType - POST with empty string type returns 400")
     void createAccount_shouldReturn400_withEmptyStringEnumType() throws Exception {
         String body = """

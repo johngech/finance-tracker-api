@@ -4,10 +4,8 @@ import com.marakicode.financetracker.transactions.TransactionType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 
 @Schema(description = "Request payload for creating a new transaction")
 public record TransactionCreateRequest(
@@ -27,11 +25,6 @@ public record TransactionCreateRequest(
     @Schema(example = "Groceries at Supermarket", description = "Optional transaction description (max 255 characters)")
     @Size(max = 255, message = "Description must not exceed 255 characters")
     String description,
-
-    @Schema(example = "2026-07-12", description = "Transaction date (ISO format, cannot be in the future)")
-    @NotNull(message = "Transaction date is required")
-    @PastOrPresent(message = "Transaction date cannot be in the future")
-    LocalDate transactionDate,
 
     @Schema(example = "Food & Dining", description = "Optional transaction category (max 50 characters)")
     @Size(max = 50, message = "Category must not exceed 50 characters")

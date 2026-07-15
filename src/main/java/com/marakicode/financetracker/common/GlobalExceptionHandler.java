@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -62,6 +63,18 @@ public class GlobalExceptionHandler {
                         HttpStatus.FORBIDDEN.value(),
                         "Forbidden",
                         ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ErrorDto> handleDisabledException(
+            DisabledException ex, HttpServletRequest request) {
+        log.debug("User disabled on {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorDto.of(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        "Unauthorized",
+                        "User account is disabled",
                         request.getRequestURI()));
     }
 

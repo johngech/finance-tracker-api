@@ -4,6 +4,7 @@ import com.marakicode.financetracker.accounts.*;
 import com.marakicode.financetracker.transactions.*;
 import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,6 +38,9 @@ class ReportsRepositoryTest {
 
     @Autowired
     private TransactionCategoryRepository transactionCategoryRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private User savedUser;
     private Account savedAccount;
@@ -90,6 +95,20 @@ class ReportsRepositoryTest {
                 });
     }
 
+    /**
+     * Overrides the transaction_date via native SQL to bypass @CreationTimestamp.
+     * Used in tests that need specific dates for date-range filtering.
+     */
+    private void overrideTransactionDate(Transaction transaction, LocalDate date) {
+        entityManager.createNativeQuery(
+                "UPDATE transactions SET transaction_date = ? WHERE id = ?")
+                .setParameter(1, date)
+                .setParameter(2, transaction.getId())
+                .executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
+    }
+
     private Transaction createTransaction(TransactionType type, BigDecimal amount,
                                           String description, LocalDate date, String category) {
         var transaction = new Transaction();
@@ -97,7 +116,6 @@ class ReportsRepositoryTest {
         transaction.setType(type == TransactionType.INCOME ? incomeType : expenseType);
         transaction.setAmount(amount);
         transaction.setDescription(description);
-        transaction.setTransactionDate(date);
         if (category != null) {
             transaction.setCategory(findOrCreateCategory(category));
         }
@@ -111,7 +129,6 @@ class ReportsRepositoryTest {
         transaction.setType(type == TransactionType.INCOME ? incomeType : expenseType);
         transaction.setAmount(amount);
         transaction.setDescription(description);
-        transaction.setTransactionDate(date);
         if (category != null) {
             transaction.setCategory(findOrCreateCategory(category));
         }
@@ -127,6 +144,14 @@ class ReportsRepositoryTest {
             return (Object[]) result[0];
         }
         return result;
+    }
+
+    /**
+     * Extract the first row from a List<Object[]> result and flatten H2 nesting.
+     */
+    private Object[] flattenListResult(List<Object[]> results) {
+        if (results.isEmpty()) return new Object[]{};
+        return flattenResult(results.get(0));
     }
 
     // --- Tests for getSummaryByUserId ---
@@ -145,7 +170,7 @@ class ReportsRepositoryTest {
                 new BigDecimal("50.00"), "Groceries", LocalDate.of(2025, 7, 10), "FOOD"));
 
         // Act
-        Object[] result = flattenResult(reportsRepository.getSummaryByUserId(
+        Object[] result = flattenListResult(reportsRepository.getSummaryByUserId(
                 savedUser.getId(), null, null));
 
         // Assert
@@ -160,16 +185,19 @@ class ReportsRepositoryTest {
     @Test
     @DisplayName("getSummaryByUserId_withDateRange_filtersCorrectly - only includes transactions within range")
     void getSummaryByUserId_withDateRange_filtersCorrectly() {
-        // Arrange
-        reportsRepository.save(createTransaction(TransactionType.INCOME,
+        // Arrange — override dates to control the range (bypass @CreationTimestamp)
+        var salary = reportsRepository.save(createTransaction(TransactionType.INCOME,
                 new BigDecimal("1000.00"), "Salary", LocalDate.of(2025, 6, 1), "SALARY"));
-        reportsRepository.save(createTransaction(TransactionType.EXPENSE,
+        var lunch = reportsRepository.save(createTransaction(TransactionType.EXPENSE,
                 new BigDecimal("100.00"), "Lunch", LocalDate.of(2025, 7, 15), "FOOD"));
-        reportsRepository.save(createTransaction(TransactionType.EXPENSE,
+        var dinner = reportsRepository.save(createTransaction(TransactionType.EXPENSE,
                 new BigDecimal("200.00"), "Dinner", LocalDate.of(2025, 8, 1), "FOOD"));
+        overrideTransactionDate(salary, LocalDate.of(2025, 6, 1));
+        overrideTransactionDate(lunch, LocalDate.of(2025, 7, 15));
+        overrideTransactionDate(dinner, LocalDate.of(2025, 8, 1));
 
         // Act — July only
-        Object[] result = flattenResult(reportsRepository.getSummaryByUserId(
+        Object[] result = flattenListResult(reportsRepository.getSummaryByUserId(
                 savedUser.getId(),
                 LocalDate.of(2025, 7, 1),
                 LocalDate.of(2025, 7, 31)));
@@ -187,7 +215,7 @@ class ReportsRepositoryTest {
     @DisplayName("getSummaryByUserId_noTransactions_returnsZeros - empty result set returns zeros")
     void getSummaryByUserId_noTransactions_returnsZeros() {
         // Act
-        Object[] result = flattenResult(reportsRepository.getSummaryByUserId(
+        Object[] result = flattenListResult(reportsRepository.getSummaryByUserId(
                 savedUser.getId(), null, null));
 
         // Assert
@@ -265,13 +293,16 @@ class ReportsRepositoryTest {
     @Test
     @DisplayName("getMonthlyBreakdown_groupsByMonth - returns income and expense per month")
     void getMonthlyBreakdown_groupsByMonth() {
-        // Arrange
-        reportsRepository.save(createTransaction(TransactionType.INCOME,
+        // Arrange — override dates to control the year (bypass @CreationTimestamp)
+        var salary = reportsRepository.save(createTransaction(TransactionType.INCOME,
                 new BigDecimal("1000.00"), "Salary", LocalDate.of(2025, 7, 1), "SALARY"));
-        reportsRepository.save(createTransaction(TransactionType.EXPENSE,
+        var rent = reportsRepository.save(createTransaction(TransactionType.EXPENSE,
                 new BigDecimal("200.00"), "Rent", LocalDate.of(2025, 7, 5), "HOUSING"));
-        reportsRepository.save(createTransaction(TransactionType.INCOME,
+        var bonus = reportsRepository.save(createTransaction(TransactionType.INCOME,
                 new BigDecimal("500.00"), "Bonus", LocalDate.of(2025, 8, 1), "BONUS"));
+        overrideTransactionDate(salary, LocalDate.of(2025, 7, 1));
+        overrideTransactionDate(rent, LocalDate.of(2025, 7, 5));
+        overrideTransactionDate(bonus, LocalDate.of(2025, 8, 1));
 
         // Act
         var results = reportsRepository.getMonthlyBreakdown(savedUser.getId(), 2025);
@@ -291,11 +322,13 @@ class ReportsRepositoryTest {
     @Test
     @DisplayName("getMonthlyBreakdown_differentYear_excludesOtherYears - only includes transactions from specified year")
     void getMonthlyBreakdown_differentYear_excludesOtherYears() {
-        // Arrange
-        reportsRepository.save(createTransaction(TransactionType.INCOME,
+        // Arrange — override dates to control the year (bypass @CreationTimestamp)
+        var salary = reportsRepository.save(createTransaction(TransactionType.INCOME,
                 new BigDecimal("1000.00"), "Salary", LocalDate.of(2025, 7, 1), "SALARY"));
-        reportsRepository.save(createTransaction(TransactionType.INCOME,
+        var bonus = reportsRepository.save(createTransaction(TransactionType.INCOME,
                 new BigDecimal("2000.00"), "Bonus", LocalDate.of(2026, 1, 1), "BONUS"));
+        overrideTransactionDate(salary, LocalDate.of(2025, 7, 1));
+        overrideTransactionDate(bonus, LocalDate.of(2026, 1, 1));
 
         // Act
         var results = reportsRepository.getMonthlyBreakdown(savedUser.getId(), 2025);
@@ -347,11 +380,13 @@ class ReportsRepositoryTest {
     @Test
     @DisplayName("getAccountBreakdown_withDateRange_filtersCorrectly - only includes transactions within range")
     void getAccountBreakdown_withDateRange_filtersCorrectly() {
-        // Arrange
-        reportsRepository.save(createTransaction(TransactionType.INCOME,
+        // Arrange — override dates to control the range (bypass @CreationTimestamp)
+        var salary = reportsRepository.save(createTransaction(TransactionType.INCOME,
                 new BigDecimal("1000.00"), "Salary", LocalDate.of(2025, 6, 1), "SALARY"));
-        reportsRepository.save(createTransaction(TransactionType.EXPENSE,
+        var food = reportsRepository.save(createTransaction(TransactionType.EXPENSE,
                 new BigDecimal("100.00"), "Food", LocalDate.of(2025, 7, 15), "FOOD"));
+        overrideTransactionDate(salary, LocalDate.of(2025, 6, 1));
+        overrideTransactionDate(food, LocalDate.of(2025, 7, 15));
 
         // Act — July only
         var results = reportsRepository.getAccountBreakdown(

@@ -45,6 +45,21 @@ public class AccountController {
                 .body(ApiResponse.success("Account created successfully", response));
     }
 
+    @GetMapping("/mine")
+    @Operation(summary = "Get my accounts", description = "Retrieve a paginated list of accounts belonging to the authenticated user. Supports filtering by name, type, and currency.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated list of your accounts",
+                    content = @Content(schema = @Schema(implementation = PagedResponse.class)))
+    })
+    public ResponseEntity<ApiResponse<PagedResponse<AccountResponse>>> getMyAccounts(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) AccountType type,
+            @RequestParam(required = false) String currency,
+            @PageableDefault(page = 0, size = 10, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
+        PagedResponse<AccountResponse> response = accountService.getAccounts(search, type, currency, pageable);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get account by ID", description = "Retrieve an account by its ID. Only the owning user can access their accounts.")
     @ApiResponses({
@@ -53,6 +68,7 @@ public class AccountController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — not the account owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found")
     })
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<AccountResponse>> getAccount(@PathVariable Long id) {
         AccountResponse response = accountService.getAccountById(id);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -64,6 +80,7 @@ public class AccountController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated list of accounts",
                     content = @Content(schema = @Schema(implementation = PagedResponse.class)))
     })
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PagedResponse<AccountResponse>>> getAccounts(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) AccountType type,
@@ -82,6 +99,7 @@ public class AccountController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — not the account owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found")
     })
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<AccountResponse>> updateAccount(
             @PathVariable Long id,
             @Valid @RequestBody CurrencyUpdateRequest request) {
@@ -113,6 +131,7 @@ public class AccountController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — not the account owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found")
     })
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteAccount(@PathVariable Long id) {
         accountService.deleteAccount(id);
         return ResponseEntity.noContent().build();

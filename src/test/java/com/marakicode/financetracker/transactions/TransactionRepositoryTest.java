@@ -3,6 +3,7 @@ package com.marakicode.financetracker.transactions;
 import com.marakicode.financetracker.accounts.*;
 import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,9 @@ class TransactionRepositoryTest {
 
     @Autowired
     private TransactionCategoryRepository transactionCategoryRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private User savedUser;
     private Account savedAccount;
@@ -93,14 +97,28 @@ class TransactionRepositoryTest {
                 });
     }
 
+    /**
+     * Overrides the transaction_date via native SQL to bypass @CreationTimestamp.
+     * Used in tests that need specific dates for date-range filtering.
+     */
+    private void overrideTransactionDate(Transaction transaction, LocalDate date) {
+        entityManager.createNativeQuery(
+                "UPDATE transactions SET transaction_date = ? WHERE id = ?")
+                .setParameter(1, date)
+                .setParameter(2, transaction.getId())
+                .executeUpdate();
+        entityManager.flush();
+        entityManager.clear();
+    }
+
     private Transaction createTransaction(Account account, TransactionType type, BigDecimal amount,
-                                          String description, LocalDate date, String category) {
+                                          String description, String category) {
         var transaction = new Transaction();
         transaction.setAccount(account);
         transaction.setType(type == TransactionType.INCOME ? incomeType : expenseType);
         transaction.setAmount(amount);
         transaction.setDescription(description);
-        transaction.setTransactionDate(date);
+        // transactionDate will be set automatically by @CreationTimestamp annotation
         if (category != null) {
             transaction.setCategory(findOrCreateCategory(category));
         }
@@ -112,7 +130,7 @@ class TransactionRepositoryTest {
     void saveTransaction_persistsWithGeneratedId() {
         // Arrange
         var transaction = createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("500.00"),
-                "Salary", LocalDate.of(2025, 6, 15), "SALARY");
+                "Salary",  "SALARY");
 
         // Act
         var saved = transactionRepository.save(transaction);
@@ -123,7 +141,7 @@ class TransactionRepositoryTest {
         assertThat(saved.getType().getName()).isEqualTo("INCOME");
         assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("500.00"));
         assertThat(saved.getDescription()).isEqualTo("Salary");
-        assertThat(saved.getTransactionDate()).isEqualTo(LocalDate.of(2025, 6, 15));
+        // transactionDate is now set automatically by @CreationTimestamp
         assertThat(saved.getCategory().getName()).isEqualTo("SALARY");
         assertThat(saved.getCreatedAt()).isNotNull();
         assertThat(saved.getUpdatedAt()).isNotNull();
@@ -135,7 +153,7 @@ class TransactionRepositoryTest {
         // Arrange
         var saved = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("50.00"),
-                        "Groceries", LocalDate.of(2025, 7, 1), "FOOD"));
+                        "Groceries",  "FOOD"));
 
         // Act
         var result = transactionRepository.findByIdAndUserId(saved.getId(), savedUser.getId());
@@ -152,7 +170,7 @@ class TransactionRepositoryTest {
         // Arrange
         var saved = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("100.00"),
-                        "Bonus", LocalDate.of(2025, 7, 1), "BONUS"));
+                        "Bonus",  "BONUS"));
 
         // Act — search with a non-existent user ID
         var result = transactionRepository.findByIdAndUserId(saved.getId(), 999L);
@@ -167,10 +185,10 @@ class TransactionRepositoryTest {
         // Arrange — create 2 transactions on savedAccount, 1 on a different account
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("100.00"),
-                        "Income 1", LocalDate.of(2025, 7, 1), "SALARY"));
+                        "Income 1", "SALARY"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("50.00"),
-                        "Expense 1", LocalDate.of(2025, 7, 2), "FOOD"));
+                        "Expense 1", "FOOD"));
 
         // Create a second account for a second user
         var user2 = new User();
@@ -193,7 +211,7 @@ class TransactionRepositoryTest {
 
         transactionRepository.save(
                 createTransaction(savedAccount2, TransactionType.INCOME, new BigDecimal("200.00"),
-                        "Income 2", LocalDate.of(2025, 7, 3), "SALARY"));
+                        "Income 2",  "SALARY"));
 
         // Act
         var spec = TransactionSpecification.accountIdEquals(savedAccount.getId());
@@ -211,13 +229,13 @@ class TransactionRepositoryTest {
         // Arrange
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("1000.00"),
-                        "Salary", LocalDate.of(2025, 7, 1), "SALARY"));
+                        "Salary",  "SALARY"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("500.00"),
-                        "Freelance", LocalDate.of(2025, 7, 2), "FREELANCE"));
+                        "Freelance",  "FREELANCE"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("200.00"),
-                        "Rent", LocalDate.of(2025, 7, 3), "HOUSING"));
+                        "Rent",  "HOUSING"));
 
         // Act
         var spec = TransactionSpecification.typeEquals(TransactionType.INCOME);
@@ -232,16 +250,19 @@ class TransactionRepositoryTest {
     @Test
     @DisplayName("findAll_withSpecification_shouldFilterByDateBetween - returns only transactions within date range")
     void findAll_withDateBetween_filtersCorrectly() {
-        // Arrange
-        transactionRepository.save(
+        // Arrange — override dates to control the range (bypass @CreationTimestamp)
+        var early = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("10.00"),
-                        "Early", LocalDate.of(2025, 6, 1), "OTHER"));
-        transactionRepository.save(
+                        "Early",  "OTHER"));
+        var mid = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("20.00"),
-                        "Mid", LocalDate.of(2025, 7, 15), "OTHER"));
-        transactionRepository.save(
+                        "Mid",  "OTHER"));
+        var late = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("30.00"),
-                        "Late", LocalDate.of(2025, 8, 1), "OTHER"));
+                        "Late",  "OTHER"));
+        overrideTransactionDate(early, LocalDate.of(2025, 6, 15));
+        overrideTransactionDate(mid, LocalDate.of(2025, 7, 15));
+        overrideTransactionDate(late, LocalDate.of(2025, 8, 1));
 
         // Act — filter for July 2025 only
         var from = LocalDate.of(2025, 7, 1);
@@ -260,13 +281,13 @@ class TransactionRepositoryTest {
         // Arrange
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("1000.00"),
-                        "Salary", LocalDate.of(2025, 7, 1), "SALARY"));
+                        "Salary", "SALARY"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("20.00"),
-                        "Lunch", LocalDate.of(2025, 7, 2), "FOOD"));
+                        "Lunch",  "FOOD"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("500.00"),
-                        "Freelance", LocalDate.of(2025, 7, 3), "SALARY"));
+                        "Freelance",  "SALARY"));
 
         // Act
         var spec = TransactionSpecification.categoryEquals("SALARY");
@@ -284,13 +305,13 @@ class TransactionRepositoryTest {
         // Arrange
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("5.00"),
-                        "Morning coffee", LocalDate.of(2025, 7, 1), "FOOD"));
+                        "Morning coffee",  "FOOD"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("3.50"),
-                        "Afternoon tea", LocalDate.of(2025, 7, 2), "FOOD"));
+                        "Afternoon tea",  "FOOD"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("8.00"),
-                        "Coffee beans", LocalDate.of(2025, 7, 3), "FOOD"));
+                        "Coffee beans",  "FOOD"));
 
         // Act
         var spec = TransactionSpecification.descriptionContains("coffee");
@@ -305,22 +326,25 @@ class TransactionRepositoryTest {
     @Test
     @DisplayName("findAll_withSpecification_dateBetween_fromOnly - from is null means no lower bound")
     void findAll_withSpecification_dateBetween_fromOnly() {
-        // Arrange
-        transactionRepository.save(
+        // Arrange — override dates to control the range (bypass @CreationTimestamp)
+        var early = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("10.00"),
-                        "Early", LocalDate.of(2025, 6, 1), "OTHER"));
-        transactionRepository.save(
+                        "Early",  "OTHER"));
+        var mid = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("20.00"),
-                        "Mid", LocalDate.of(2025, 7, 15), "OTHER"));
-        transactionRepository.save(
+                        "Mid", "OTHER"));
+        var late = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("30.00"),
-                        "Late", LocalDate.of(2025, 8, 1), "OTHER"));
+                        "Late",  "OTHER"));
+        overrideTransactionDate(early, LocalDate.of(2025, 7, 1));
+        overrideTransactionDate(mid, LocalDate.of(2025, 7, 15));
+        overrideTransactionDate(late, LocalDate.of(2025, 8, 1));
 
         // Act — only `to` bound (July 31), no `from` bound
         var spec = TransactionSpecification.dateBetween(null, LocalDate.of(2025, 7, 31));
         var result = transactionRepository.findAll(spec, PageRequest.of(0, 10));
 
-        // Assert — returns transactions on or before July 31 (July 15 and August 1)
+        // Assert — returns transactions on or before July 31 (Early and Mid)
         assertThat(result.getContent()).hasSize(2);
         assertThat(result.getContent().get(0).getDescription()).isEqualTo("Early");
         assertThat(result.getContent().get(1).getDescription()).isEqualTo("Mid");
@@ -329,22 +353,25 @@ class TransactionRepositoryTest {
     @Test
     @DisplayName("findAll_withSpecification_dateBetween_toOnly - to is null means no upper bound")
     void findAll_withSpecification_dateBetween_toOnly() {
-        // Arrange
-        transactionRepository.save(
+        // Arrange — override dates to control the range (bypass @CreationTimestamp)
+        var early = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("10.00"),
-                        "Early", LocalDate.of(2025, 6, 1), "OTHER"));
-        transactionRepository.save(
+                        "Early",  "OTHER"));
+        var mid = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("20.00"),
-                        "Mid", LocalDate.of(2025, 7, 15), "OTHER"));
-        transactionRepository.save(
+                        "Mid",  "OTHER"));
+        var late = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("30.00"),
-                        "Late", LocalDate.of(2025, 8, 1), "OTHER"));
+                        "Late",  "OTHER"));
+        overrideTransactionDate(early, LocalDate.of(2025, 6, 15));
+        overrideTransactionDate(mid, LocalDate.of(2025, 7, 15));
+        overrideTransactionDate(late, LocalDate.of(2025, 8, 1));
 
         // Act — only `from` bound (July 1), no `to` bound
         var spec = TransactionSpecification.dateBetween(LocalDate.of(2025, 7, 1), null);
         var result = transactionRepository.findAll(spec, PageRequest.of(0, 10));
 
-        // Assert — returns transactions on or after July 1 (July 15 and August 1)
+        // Assert — returns transactions on or after July 1 (Mid and Late, but not Early)
         assertThat(result.getContent()).hasSize(2);
         assertThat(result.getContent().get(0).getDescription()).isEqualTo("Mid");
         assertThat(result.getContent().get(1).getDescription()).isEqualTo("Late");
@@ -353,22 +380,25 @@ class TransactionRepositoryTest {
     @Test
     @DisplayName("findAll_withCombinedSpecifications_filtersByTypeAndCategoryAndDate - multiple filters applied together")
     void findAll_withCombinedSpecifications_filtersByTypeAndCategoryAndDate() {
-        // Arrange — create diverse transactions
-        transactionRepository.save(
+        // Arrange — override dates to control the range (bypass @CreationTimestamp)
+        var salary = transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("1000.00"),
-                        "Salary", LocalDate.of(2025, 7, 1), "SALARY"));
+                        "Salary",  "SALARY"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("50.00"),
-                        "Lunch", LocalDate.of(2025, 7, 5), "FOOD"));
+                        "Lunch",  "FOOD"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("500.00"),
-                        "Freelance", LocalDate.of(2025, 7, 10), "FREELANCE"));
+                        "Freelance",  "FREELANCE"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("200.00"),
-                        "Rent", LocalDate.of(2025, 8, 1), "HOUSING"));
+                        "Rent",  "HOUSING"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("300.00"),
-                        "Bonus", LocalDate.of(2025, 6, 15), "SALARY"));
+                        "Bonus",  "SALARY"));
+
+        // Put only the Salary INCOME transaction in July 2025
+        overrideTransactionDate(salary, LocalDate.of(2025, 7, 15));
 
         // Act — filter: INCOME type + SALARY category + July date range
         var spec = Specification.where(TransactionSpecification.typeEquals(TransactionType.INCOME))
@@ -389,10 +419,10 @@ class TransactionRepositoryTest {
         // Arrange
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.INCOME, new BigDecimal("100.00"),
-                        "Income 1", LocalDate.of(2025, 7, 1), "SALARY"));
+                        "Income 1", "SALARY"));
         transactionRepository.save(
                 createTransaction(savedAccount, TransactionType.EXPENSE, new BigDecimal("50.00"),
-                        "Expense 1", LocalDate.of(2025, 7, 2), "FOOD"));
+                        "Expense 1",  "FOOD"));
 
         var user2 = new User();
         user2.setFirstName("Bob");
@@ -414,7 +444,7 @@ class TransactionRepositoryTest {
 
         transactionRepository.save(
                 createTransaction(savedAccount2, TransactionType.INCOME, new BigDecimal("200.00"),
-                        "Income 2", LocalDate.of(2025, 7, 3), "SALARY"));
+                        "Income 2",  "SALARY"));
 
         // Act — filter: savedAccount + INCOME
         var spec = Specification.where(TransactionSpecification.accountIdEquals(savedAccount.getId()))

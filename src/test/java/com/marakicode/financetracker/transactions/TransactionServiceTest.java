@@ -124,8 +124,7 @@ class TransactionServiceTest {
     @DisplayName("createTransaction_income_updatesBalanceCorrectly - adds INCOME amount to account balance")
     void createTransaction_income_updatesBalanceCorrectly() {
         // Arrange
-        var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
-                new BigDecimal("200.00"), "salary", LocalDate.of(2025, 6, 15), "income");
+        var request = new TransactionCreateRequest(1L, TransactionType.INCOME, new BigDecimal("200.00"), "salary", "income");
         var transaction = sampleTransaction(TransactionType.INCOME, new BigDecimal("200.00"));
         var response = sampleResponse(TransactionType.INCOME, new BigDecimal("200.00"));
 
@@ -148,8 +147,7 @@ class TransactionServiceTest {
     @DisplayName("createTransaction_expense_updatesBalanceCorrectly - subtracts EXPENSE amount from account balance")
     void createTransaction_expense_updatesBalanceCorrectly() {
         // Arrange
-        var request = new TransactionCreateRequest(1L, TransactionType.EXPENSE,
-                new BigDecimal("200.00"), "groceries", LocalDate.of(2025, 6, 15), "food");
+        var request = new TransactionCreateRequest(1L, TransactionType.EXPENSE, new BigDecimal("200.00"), "groceries", "food");
         var transaction = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("200.00"));
         var response = sampleResponse(TransactionType.EXPENSE, new BigDecimal("200.00"));
 
@@ -173,8 +171,7 @@ class TransactionServiceTest {
     void createTransaction_expense_insufficientFunds_throwsException() {
         // Arrange
         account.setBalance(new BigDecimal("100.00"));
-        var request = new TransactionCreateRequest(1L, TransactionType.EXPENSE,
-                new BigDecimal("200.00"), "car", LocalDate.of(2025, 6, 15), "transport");
+        var request = new TransactionCreateRequest(1L, TransactionType.EXPENSE, new BigDecimal("200.00"), "car", "transport");
         var transaction = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("200.00"));
 
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
@@ -190,8 +187,7 @@ class TransactionServiceTest {
     @DisplayName("createTransaction_accountNotFound_throwsResourceNotFoundException - account does not exist for user")
     void createTransaction_accountNotFound_throwsResourceNotFoundException() {
         // Arrange
-        var request = new TransactionCreateRequest(999L, TransactionType.EXPENSE,
-                new BigDecimal("200.00"), "car", LocalDate.of(2025, 6, 15), "transport");
+        var request = new TransactionCreateRequest(999L, TransactionType.EXPENSE, new BigDecimal("200.00"), "car", "transport");
 
         when(accountRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
@@ -206,7 +202,7 @@ class TransactionServiceTest {
     void createTransaction_nullCategory_succeeds() {
         // Arrange
         var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
-                new BigDecimal("200.00"), "salary", LocalDate.of(2025, 6, 15), null);
+                new BigDecimal("200.00"), "salary",  null);
         var transaction = sampleTransaction(TransactionType.INCOME, new BigDecimal("200.00"));
         var response = sampleResponse(TransactionType.INCOME, new BigDecimal("200.00"));
 
@@ -231,7 +227,7 @@ class TransactionServiceTest {
         // Arrange
         when(transactionTypeRepository.findByName("INCOME")).thenReturn(Optional.empty());
         var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
-                new BigDecimal("200.00"), "salary", LocalDate.of(2025, 6, 15), null);
+                new BigDecimal("200.00"), "salary",  null);
 
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
         when(transactionMapper.toEntity(request)).thenReturn(sampleTransaction(TransactionType.INCOME, new BigDecimal("200.00")));
@@ -300,7 +296,7 @@ class TransactionServiceTest {
         // Reverse EXPENSE: balance = 1000 + 100 = 1100
         // Apply INCOME: balance = 1100 + 100 = 1200
         var existing = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("100.00"));
-        var request = new TransactionUpdateRequest(TransactionType.INCOME, null, null, null, null);
+        var request = new TransactionUpdateRequest(TransactionType.INCOME, null, null, null);
         var response = sampleResponse(TransactionType.INCOME, new BigDecimal("100.00"));
 
         when(transactionRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(existing));
@@ -324,7 +320,7 @@ class TransactionServiceTest {
     void updateTransaction_allNullFields_returnsUnchanged() {
         // Arrange
         var existing = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("100.00"));
-        var request = new TransactionUpdateRequest(null, null, null, null, null);
+        var request = new TransactionUpdateRequest(null, null, null, null);
         var response = sampleResponse(TransactionType.EXPENSE, new BigDecimal("100.00"));
 
         when(transactionRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(existing));
@@ -348,7 +344,7 @@ class TransactionServiceTest {
         // Update to EXPENSE 2000: 2000 > 500 → insufficient
         var existing = sampleTransaction(TransactionType.INCOME, new BigDecimal("500.00"));
         var request = new TransactionUpdateRequest(TransactionType.EXPENSE, new BigDecimal("2000.00"),
-                null, null, null);
+                null, null);
 
         when(transactionRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(existing));
 
@@ -362,7 +358,7 @@ class TransactionServiceTest {
     @DisplayName("updateTransaction_accountNotFound_throwsResourceNotFoundException - transaction not found for user")
     void updateTransaction_accountNotFound_throwsResourceNotFoundException() {
         // Arrange
-        var request = new TransactionUpdateRequest(TransactionType.INCOME, null, null, null, null);
+        var request = new TransactionUpdateRequest(TransactionType.INCOME, null, null, null);
 
         when(transactionRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
@@ -405,8 +401,7 @@ class TransactionServiceTest {
     @DisplayName("createTransaction_savesTransactionBeforeBalanceUpdate - verifies transaction save precedes account save")
     void createTransaction_savesTransactionBeforeBalanceUpdate() {
         // Arrange
-        var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
-                new BigDecimal("200.00"), "salary", LocalDate.of(2025, 6, 15), "income");
+        var request = new TransactionCreateRequest(1L, TransactionType.INCOME, new BigDecimal("200.00"), "salary", "income");
         var transaction = sampleTransaction(TransactionType.INCOME, new BigDecimal("200.00"));
         var response = sampleResponse(TransactionType.INCOME, new BigDecimal("200.00"));
 
@@ -429,8 +424,7 @@ class TransactionServiceTest {
     void createTransaction_expense_exactBalance_succeeds() {
         // Arrange
         account.setBalance(new BigDecimal("200.00"));
-        var request = new TransactionCreateRequest(1L, TransactionType.EXPENSE,
-                new BigDecimal("200.00"), "rent", LocalDate.of(2025, 6, 15), "housing");
+        var request = new TransactionCreateRequest(1L, TransactionType.EXPENSE, new BigDecimal("200.00"), "rent", "housing");
         var transaction = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("200.00"));
         var response = sampleResponse(TransactionType.EXPENSE, new BigDecimal("200.00"));
 
@@ -474,7 +468,7 @@ class TransactionServiceTest {
         // Apply EXPENSE 50: balance = 1100 - 50 = 1050
         var existing = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("100.00"));
         var request = new TransactionUpdateRequest(TransactionType.EXPENSE, new BigDecimal("50.00"),
-                null, null, null);
+                null, null);
         var response = sampleResponse(TransactionType.EXPENSE, new BigDecimal("50.00"));
 
         when(transactionRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(existing));
@@ -502,7 +496,7 @@ class TransactionServiceTest {
         // Balance should NOT be touched (no reverse/re-apply)
         var existing = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("100.00"));
         existing.setCategory(createCategoryEntity("food"));
-        var request = new TransactionUpdateRequest(null, null, "updated description", null, "transport");
+        var request = new TransactionUpdateRequest(null, null, "updated description", "Transport");
         var response = sampleResponse(TransactionType.EXPENSE, new BigDecimal("100.00"));
 
         when(transactionRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(existing));
@@ -515,7 +509,7 @@ class TransactionServiceTest {
         // Assert
         assertThat(result).isEqualTo(response);
         assertThat(existing.getDescription()).isEqualTo("updated description");
-        assertThat(existing.getCategory().getName()).isEqualTo("transport");
+        assertThat(existing.getCategory().getName()).isEqualTo("Transport");
         assertThat(existing.getType().getName()).isEqualTo("EXPENSE");
         assertThat(existing.getAmount()).isEqualByComparingTo(new BigDecimal("100.00"));
         assertThat(account.getBalance()).isEqualByComparingTo(new BigDecimal("1000.00"));
@@ -528,7 +522,7 @@ class TransactionServiceTest {
     void updateTransaction_onlyDescriptionUpdate_skipsBalanceMutation() {
         // Arrange: only description changes, balance must not be touched
         var existing = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("100.00"));
-        var request = new TransactionUpdateRequest(null, null, "new desc", null, null);
+        var request = new TransactionUpdateRequest(null, null, "new desc", null);
         var response = sampleResponse(TransactionType.EXPENSE, new BigDecimal("100.00"));
 
         when(transactionRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(existing));
@@ -551,7 +545,7 @@ class TransactionServiceTest {
         // Apply INCOME 200: balance = 1100 + 200 = 1300
         var existing = sampleTransaction(TransactionType.EXPENSE, new BigDecimal("100.00"));
         var request = new TransactionUpdateRequest(TransactionType.INCOME, new BigDecimal("200.00"),
-                null, null, null);
+                null, null);
         var response = sampleResponse(TransactionType.INCOME, new BigDecimal("200.00"));
 
         when(transactionRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(existing));
@@ -581,7 +575,7 @@ class TransactionServiceTest {
                 .thenReturn(Optional.of(createCategoryEntity(newCategoryName)));
 
         var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
-                new BigDecimal("200.00"), "salary", LocalDate.of(2025, 6, 15), newCategoryName);
+                new BigDecimal("200.00"), "salary", newCategoryName);
         var transaction = sampleTransaction(TransactionType.INCOME, new BigDecimal("200.00"));
         var response = sampleResponse(TransactionType.INCOME, new BigDecimal("200.00"));
 
@@ -608,7 +602,7 @@ class TransactionServiceTest {
                 .thenReturn(Optional.empty());
 
         var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
-                new BigDecimal("200.00"), "salary", LocalDate.of(2025, 6, 15), failCategoryName);
+                new BigDecimal("200.00"), "salary", failCategoryName);
         var transaction = sampleTransaction(TransactionType.INCOME, new BigDecimal("200.00"));
 
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
@@ -643,8 +637,7 @@ class TransactionServiceTest {
     void createTransaction_frozenAccount_throwsAccountFrozenException() {
         // Arrange
         account.setFrozen(true);
-        var request = new TransactionCreateRequest(1L, TransactionType.INCOME,
-                new BigDecimal("200.00"), "salary", LocalDate.of(2025, 6, 15), "income");
+        var request = new TransactionCreateRequest(1L, TransactionType.INCOME, new BigDecimal("200.00"), "salary", "income");
 
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
 
