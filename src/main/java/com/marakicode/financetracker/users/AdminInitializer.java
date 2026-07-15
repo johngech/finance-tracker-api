@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "app.admin.initializer.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "app.admin.initializer.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class AdminInitializer implements CommandLineRunner {
 

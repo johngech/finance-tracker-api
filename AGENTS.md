@@ -76,7 +76,7 @@ Workflow: `.github/workflows/ci.yml` — triggered on push to `main` and PRs.
 
 - **Package**: `com.marakicode.financetracker`
 - **Entrypoint**: `FinancetrackerApplication.java`
-- **DB migrations**: Flyway SQL in `src/main/resources/db/migration/` (`V1__*.sql` through `V7__*.sql`)
+- **DB migrations**: Flyway SQL in `src/main/resources/db/migration/` (`V1__*.sql` through `V9__*.sql`)
 - **REST Docs**: tests use `@AutoConfigureRestDocs` + `MockMvc`; AsciiDoc in `src/main/asciidoc/`
 - **Test config**: `src/test/resources/application.yaml` (H2 in-memory, Flyway disabled)
 
@@ -114,6 +114,8 @@ com.marakicode.financetracker/
                          # ReportsSecurityRules
   reports/dto/           # SummaryResponse, CategoryBreakdownResponse,
                          # MonthlyBreakdownResponse, AccountBreakdownResponse
+  admin/                 # Admin-only operations: controllers, services, facades,
+                         # security rules, exceptions
 ```
 
 Each domain package is self-contained with a controller at the domain root. Only create `entity/`, `repository/`, `dto/`, `service/` sub-packages when a domain has **more than 2 files** of that type — otherwise, files sit flat at the domain root.
@@ -370,3 +372,25 @@ Each domain package is self-contained with a controller at the domain root. Only
 - `GlobalExceptionHandler` — added `MissingServletRequestParameterException` handler (400 for missing required params)
 - H2 compatibility: `ReportsRepositoryTest` uses `flattenResult()` helper for nested Object[] from H2 aggregates
 - 31 new tests (10 repo + 10 service + 11 controller)
+
+### Phase 12: Admin Domain — DONE
+- `AdminInitializer` — `CommandLineRunner` that seeds default admin user on first startup (idempotent)
+  - `@ConditionalOnProperty(name = "app.admin.initializer.enabled", havingValue = "true", matchIfMissing = true)` — enabled by default in all profiles
+  - Requires all four env vars (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_FIRST_NAME`, `ADMIN_LAST_NAME`) — skips if any missing
+  - Checks if admin already exists — skips if yes
+- `AdminUserController` — suspend/activate users, reset passwords, update roles
+- `AdminAccountController` — freeze/unfreeze accounts
+- `AdminTransactionController` — view all transactions (read-only)
+- `AdminDashboardController` — platform-wide statistics (users, accounts, transactions)
+- `AdminSecurityRules` — `/admin/**` requires `ROLE_ADMIN`
+- Facade pattern: `UsersFacade`, `AccountsFacade`, `TransactionsFacade`, `ReportsFacade` decouple admin domain from user domain internals
+- `LastAdminActionException` — prevents demoting/suspending/deleting the last active admin
+- Flyway V8: add `active` column to users (suspend/activate workflow)
+- Flyway V9: add `frozen` column to accounts (freeze/unfreeze workflow)
+
+### Docker & Deployment — DONE
+- `compose.yaml` — Docker Compose with app + PostgreSQL, admin env vars injected
+- `Dockerfile` — multi-stage build (maven:3.9-eclipse-temurin-17 → eclipse-temurin:17-jre-alpine)
+- `.env` / `.env.example` — environment variable templates
+- Admin seeding via env vars: `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_FIRST_NAME`, `ADMIN_LAST_NAME`
+- Quick start: `docker compose up --build` (admin user auto-seeded on first startup)

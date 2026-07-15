@@ -13,4 +13,6 @@
     '''\.idea/''',
     # Maven wrapper
     '''\.mvn/''',
+    # Dev profile has JWT secret fallback (dev-only, never used in stag/prod)
+    '''src/main/resources/application-dev\.yaml''',
   ]

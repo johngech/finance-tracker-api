@@ -2,9 +2,9 @@
 
 ## Context Summary
 
-- **Project:** `com.marakicode.financetracker` — Spring Boot 3.5.0 / Java 17 / Maven monolith
+- **Project:** `com.marakicode.financetracker` — Spring Boot 3.5.16 / Java 17 / Maven monolith
 - **Architecture:** PostgreSQL + Flyway + JPA + Lombok + MapStruct + Spring Security 6.5.0 + REST Docs, DDD-style package layout
-- **Current State:** Foundation, User Management, Auth/JWT, Accounts, Transactions, Code Review Fixes (Rounds 1 & 2), Enum Error Handling, 3NF Refactoring, and Reports Domain are all complete. JWT-based stateless authentication with login, register, refresh, and profile endpoints is fully implemented. Ownership-based authorization via `UserIdPrincipal` and `@PreAuthorize` is enforced on all domain endpoints. Transaction type and category are normalized to 3NF reference tables (Flyway V6/V7). `SecurityUtils` provides shared current-user resolution. Reports domain provides read-only JPQL aggregation queries (SUM, COUNT, GROUP BY, CASE, COALESCE, date functions) over existing transaction data — no new tables. 227 tests passing, 2 skipped.
+- **Current State:** Foundation, User Management, Auth/JWT, Accounts, Transactions, Code Review Fixes (Rounds 1 & 2), Enum Error Handling, 3NF Refactoring, Reports Domain, Admin Domain, Docker & Deployment, and CI/CD are all complete. JWT-based stateless authentication with login, register, refresh, and profile endpoints is fully implemented. Ownership-based authorization via `UserIdPrincipal` and `@PreAuthorize` is enforced on all domain endpoints. Transaction type and category are normalized to 3NF reference tables (Flyway V6/V7). Admin domain provides user suspension, account freezing, role management, and platform-wide statistics via facade pattern. `AdminInitializer` seeds default admin user on first startup via `CommandLineRunner` (enabled by default, gated by env vars). Docker Compose setup with multi-stage build. 227 tests passing, 2 skipped.
 - **Target State:** Fully functional finance tracker with JWT auth, CRUD for users/accounts/transactions, financial reporting, pagination, validation, and REST documentation.
 
 ---
@@ -20,7 +20,7 @@
 | R5 | Account management CRUD (bank/investment accounts) | `accounts/` | High | ✅ Done |
 | R6 | Transaction management CRUD (financial transactions linked to accounts) | `transactions/` | High | ✅ Done |
 | R7 | Financial reporting (summaries by category and time period) | `reports/` | Medium | ✅ Done |
-| R8 | Data validation (positive amounts, transaction types) | Service Layer | Medium | ⬜ Not started |
+| R8 | Data validation (positive amounts, transaction types) | Service Layer | Medium | ✅ Done |
 | R9 | Pagination for list endpoints | Controller + Service | Medium | ✅ Done |
 | R10 | Standard error handling with HTTP status codes | `common/` | Medium | ✅ Done |
 | R11 | Audit tracking (createdAt, updatedAt timestamps) | Entity Layer | Medium | ✅ Done |
@@ -28,6 +28,10 @@
 | R13 | Ownership-based authorization on all domain endpoints | Security | High | ✅ Done |
 | R14 | JWT token type discrimination (access vs refresh) | `auth/` | High | ✅ Done |
 | R15 | Descriptive enum error messages | `common/` | Medium | ✅ Done |
+| R16 | Admin domain (user/account/transaction management) | `admin/` | High | ✅ Done |
+| R17 | Admin seeding on first startup | `users/` | High | ✅ Done |
+| R18 | Docker & Docker Compose deployment | Infrastructure | High | ✅ Done |
+| R19 | CI/CD pipeline, git hooks, static analysis | Infrastructure | High | ✅ Done |
 
 ---
 
@@ -57,6 +61,8 @@ com.marakicode.financetracker/
                        # security rules
   reports/dto/         # SummaryResponse, CategoryBreakdownResponse,
                        # MonthlyBreakdownResponse, AccountBreakdownResponse
+  admin/               # Admin-only operations: controllers, services, facades,
+                       # security rules, exceptions
 ```
 
 ### Key Design Patterns
@@ -398,7 +404,7 @@ com.marakicode.financetracker/
 
 ---
 
-### Phase 13: CI/CD, Git Hooks & Static Analysis — DONE
+### Phase 13: CI/CD, Git Hooks & Static Analysis — ✅ DONE
 
 **Goal:** Automated CI pipeline, local developer safety hooks, and security-focused static analysis tooling.
 
@@ -412,17 +418,17 @@ com.marakicode.financetracker/
 | **Pre-commit Hook** | `.githooks/pre-commit` — runs `gitleaks detect --staged --redact` on staged files; blocks commit if secrets detected; gracefully skips if gitleaks not installed. |
 | **Pre-push Hook** | `.githooks/pre-push` — runs `mvn compile -q` then `mvn test -q`; blocks push on failure; bypassable via `SKIP_PUSH_HOOKS=1` env var. |
 | **Hooks Setup Script** | `.githooks/setup.sh` — one-command git hooks activation (`git config core.hooksPath .githooks`), idempotent. |
-| **GitHub Actions CI** | `.github/workflows/ci.yml` — 3 parallel jobs: (1) Build & Test (PR + main), (2) Gitleaks secret scan with full history (PR + main), (3) SpotBugs/FindSecBugs (main only). Test reports uploaded as artifacts. |
+| **GitHub Actions CI** | `.github/workflows/ci.yml` — 4 parallel jobs: (1) Build & Test (PR + main), (2) Gitleaks secret scan with full history (PR + main), (3) SpotBugs/FindSecBugs (main only), (4) Docker Build (PR + main). Test reports uploaded as artifacts. |
 | **Dependabot** | `.github/dependabot.yml` — weekly Maven dependency update PRs (Monday), monthly GitHub Actions dependency update PRs. |
 | **Documentation** | `AGENTS.md` updated with CI/CD & Security section covering hooks setup, Maven analysis commands, CI workflow overview, and Dependabot. |
 
 **Environment-based behavior:**
 
-| Trigger | Build & Test | Gitleaks | SpotBugs |
-|---------|-------------|----------|----------|
-| PR to main | ✅ | ✅ | ❌ |
-| Push to main | ✅ | ✅ | ✅ |
-| Dependabot PR | ✅ | ✅ | ❌ |
+| Trigger | Build & Test | Gitleaks | SpotBugs | Docker Build |
+|---------|-------------|----------|----------|-------------|
+| PR to main | ✅ | ✅ | ❌ | ✅ |
+| Push to main | ✅ | ✅ | ✅ | ✅ |
+| Dependabot PR | ✅ | ✅ | ❌ | ✅ |
 
 **Tools installed:**
 - SpotBugs + FindSecBugs: `mvn spotbugs:spotbugs`
@@ -442,7 +448,51 @@ com.marakicode.financetracker/
 
 ---
 
-### Phase 12: REST Documentation & Final Integration — ⬜ NOT STARTED
+### Phase 14: Admin Domain — ✅ DONE
+
+**Goal:** Platform administration — user suspension, account freezing, role management, and admin seeding.
+
+**What was delivered:**
+
+| Functionality | Description |
+|---------------|-------------|
+| **AdminInitializer** | `CommandLineRunner` seeds default admin user on first startup. Idempotent — checks if admin exists, skips if yes. Gated by `app.admin.initializer.enabled` (default: `true`). Requires all four env vars (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_FIRST_NAME`, `ADMIN_LAST_NAME`). |
+| **AdminUserController** | Suspend/activate users, reset passwords, update roles. Prevents last-admin demotion/suspension via `LastAdminActionException`. |
+| **AdminAccountController** | Freeze/unfreeze accounts (blocks transactions on frozen accounts). |
+| **AdminTransactionController** | Read-only view of all transactions across all users. |
+| **AdminDashboardController** | Platform-wide statistics — total users, accounts, transactions. |
+| **Facade Pattern** | `UsersFacade`, `AccountsFacade`, `TransactionsFacade`, `ReportsFacade` — interfaces decouple admin domain from user/account/transaction domain internals. |
+
+**Database:**
+- Flyway V8: adds `active` column to `users` (suspend/activate workflow)
+- Flyway V9: adds `frozen` column to `accounts` (freeze/unfreeze workflow)
+
+**Security:**
+- `AdminSecurityRules` — all `/admin/**` endpoints require `ROLE_ADMIN`
+- `LastAdminActionException` — prevents demoting, suspending, or deleting the last active admin
+
+---
+
+### Phase 15: Docker & Deployment — ✅ DONE
+
+**Goal:** Containerized deployment with Docker Compose for quick-start setup.
+
+**What was delivered:**
+
+| Component | Detail |
+|-----------|--------|
+| **Dockerfile** | Multi-stage build: `maven:3.9-eclipse-temurin-17` builder → `eclipse-temurin:17-jre-alpine` runtime. |
+| **compose.yaml** | Docker Compose with app + PostgreSQL services. Health checks on both. Resource limits. Depends_on with health condition. Admin env vars injected. |
+| **.env / .env.example** | Environment variable templates for local and production use. |
+
+**Admin seeding in Docker:**
+- Admin env vars (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_FIRST_NAME`, `ADMIN_LAST_NAME`) are passed via `compose.yaml` → `.env`
+- `AdminInitializer` runs on first startup — creates admin user, skips on subsequent startups
+- Quick start: `docker compose up --build`
+
+---
+
+### Phase 16: REST Documentation & Final Integration — ⬜ NOT STARTED
 
 **Goal:** Generate API documentation and verify end-to-end flows.
 
@@ -471,8 +521,11 @@ Phase 1 (Foundation)
 
 Phase 6 (Code Review Fixes) — applied across Phases 1–4
 Phase 7 (Enum Error Handling) — applied to GlobalExceptionHandler
+Phase 12 (Admin Domain) — builds on all user/account/transaction domains
 Phase 13 (CI/CD, Git Hooks & Static Analysis) — independent, no code dependencies
-Phase 12 (Docs & Integration)
+Phase 14 (Admin Domain detail) — duplicate of Phase 12 (consolidated)
+Phase 15 (Docker & Deployment) — builds on Phase 13 (CI pipeline)
+Phase 16 (Docs & Integration) — final phase
 ```
 
 ### Cross-Domain Dependencies
@@ -497,6 +550,8 @@ Phase 12 (Docs & Integration)
 | V5 | Accounts | Account types reference/lookup table |
 | V6 | Transactions | Transaction types + categories reference tables with FK constraints |
 | V7 | Transactions | FK indexes on type/category + whitespace category cleanup |
+| V8 | Admin | Add `active` column to users (suspend/activate workflow) |
+| V9 | Admin | Add `frozen` column to accounts (freeze/unfreeze workflow) |
 
 ---
 
@@ -515,8 +570,11 @@ Phase 12 (Docs & Integration)
 | Phase 9: Code Review Round 1 | ✅ Complete | 8 passing |
 | Phase 10: Code Review Round 2 | ✅ Complete | 12 passing |
 | Phase 11: Reports Domain | ✅ Complete | 31 passing |
-| Phase 12: Docs & Integration | ⬜ Not Started | — |
+| Phase 12: Admin Domain | ✅ Complete | — |
 | Phase 13: CI/CD, Git Hooks & Static Analysis | ✅ Complete | — |
+| Phase 14: Admin Domain (detail) | ✅ Complete | — |
+| Phase 15: Docker & Deployment | ✅ Complete | — |
+| Phase 16: Docs & Integration | ⬜ Not Started | — |
 | **Total** | | **227 passing (+2 skipped)** |
 
 ---
@@ -602,3 +660,21 @@ Phase 12 (Docs & Integration)
 | GET | `/api/v1/reports/by-category` | authenticated | Spending breakdown by category |
 | GET | `/api/v1/reports/monthly` | authenticated | Month-by-month income vs expense |
 | GET | `/api/v1/reports/by-account` | authenticated | Per-account income/expense breakdown |
+
+### Admin Domain (`/api/v1/admin`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/admin/dashboard` | ADMIN | Platform-wide statistics |
+| GET | `/api/v1/admin/users` | ADMIN | List all users with search |
+| GET | `/api/v1/admin/users/{id}` | ADMIN | Get any user by ID |
+| PATCH | `/api/v1/admin/users/{id}/suspend` | ADMIN | Suspend user account |
+| PATCH | `/api/v1/admin/users/{id}/activate` | ADMIN | Activate suspended user |
+| PATCH | `/api/v1/admin/users/{id}/role` | ADMIN | Change user role |
+| POST | `/api/v1/admin/users/{id}/reset-password` | ADMIN | Reset to random password |
+| GET | `/api/v1/admin/accounts` | ADMIN | List all accounts with search |
+| GET | `/api/v1/admin/accounts/{id}` | ADMIN | Get any account by ID |
+| PATCH | `/api/v1/admin/accounts/{id}/freeze` | ADMIN | Freeze account (blocks transactions) |
+| PATCH | `/api/v1/admin/accounts/{id}/unfreeze` | ADMIN | Unfreeze account |
+| GET | `/api/v1/admin/transactions` | ADMIN | List all transactions with search |
+| GET | `/api/v1/admin/transactions/{id}` | ADMIN | Get any transaction by ID |

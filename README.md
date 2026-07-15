@@ -666,14 +666,28 @@ source ~/.sdkman/bin/sdkman-init.sh && sdk env
 # 2. Create database
 createdb financetracker
 
-# 3. Run migrations + start app
+# 3. Load environment variables
+set -a && source .env && set +a
+
+# 4. Run migrations + start app
 mvn spring-boot:run
 
-# 4. Access Swagger UI
+# 5. Access Swagger UI
 open http://localhost:8080/swagger-ui.html
 
-# 5. Run tests
+# 6. Run tests
 mvn test
+```
+
+### Docker
+
+```bash
+# Build and run everything (app + PostgreSQL)
+docker compose up --build
+
+# The admin user is auto-seeded on first startup.
+# Default credentials: admin@financetracker.com / YourSecureP@ss1
+# Change via ADMIN_EMAIL / ADMIN_PASSWORD env vars in .env.
 ```
 
 ### Environment Variables
@@ -681,10 +695,17 @@ mvn test
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SPRING_PROFILES_ACTIVE` | Environment profile (`dev`, `stag`, `prod`) | `dev` |
-| `SPRING_DATASOURCE_URL` | PostgreSQL connection URL | `jdbc:postgresql://localhost:5432/financetracker` |
-| `SPRING_DATASOURCE_USERNAME` | Database username | `postgres` |
-| `SPRING_DATASOURCE_PASSWORD` | Database password | — |
-| `SPRING_JWT_SECRET` | JWT signing secret (HMAC-SHA) | — |
+| `DB_URL` | PostgreSQL connection URL | `jdbc:postgresql://localhost:5432/financetracker` |
+| `DB_USERNAME` | Database username | `postgres` |
+| `DB_PASSWORD` | Database password | — (required) |
+| `JWT_SECRET` | JWT signing secret (HMAC-SHA, 64+ chars) | — (required) |
+| `CORS_ORIGIN` | Allowed CORS origin | `http://localhost:3000` |
+| `ADMIN_EMAIL` | Admin seed email | `admin@financetracker.com` |
+| `ADMIN_PASSWORD` | Admin seed password | — (required for seeding) |
+| `ADMIN_FIRST_NAME` | Admin seed first name | `Admin` |
+| `ADMIN_LAST_NAME` | Admin seed last name | `User` |
+
+> **Admin seeding**: On first startup, if an admin user doesn't exist and all four `ADMIN_*` vars are set, an admin account is created automatically. The initializer is a no-op on subsequent startups.
 
 ---
 

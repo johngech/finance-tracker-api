@@ -2,7 +2,25 @@
 # Docker Build Context Exclusions
 # ==========================================
 # Whitelist approach: exclude everything, then allow only what the build needs.
+# Additional exclusions below are defense-in-depth alongside the whitelist.
 
 *
 !pom.xml
 !src/
+
+# Defense-in-depth exclusions (redundant with whitelist but explicit)
+target/
+.git/
+.github/
+.githooks/
+.opencode/
+.idea/
+*.iws
+*.iml
+*.md
+config/
+.env
+.env.*
+.gitleaks.toml
+.gitignore
+.gitattributes

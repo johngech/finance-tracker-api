@@ -26,6 +26,10 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@financetracker.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - ADMIN_FIRST_NAME=${ADMIN_FIRST_NAME:-Admin}
+      - ADMIN_LAST_NAME=${ADMIN_LAST_NAME:-User}
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,6 +42,14 @@ services:
     # Allow 45s for graceful shutdown (Spring lifecycle timeout is 30s + buffer).
     stop_grace_period: 45s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   # ---- PostgreSQL Database ----
   postgres:
@@ -52,11 +64,19 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
 volumes:
   pgdata:

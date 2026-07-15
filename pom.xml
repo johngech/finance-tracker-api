@@ -28,10 +28,8 @@
     </scm>
     <properties>
         <java.version>17</java.version>
-        <!-- Flyway Maven plugin defaults — override via CLI: -Dflyway.password=xxx -->
+        <!-- Flyway Maven plugin — provide via CLI: -Dflyway.user=X -Dflyway.password=X -->
         <flyway.url>jdbc:postgresql://localhost:5432/financetracker</flyway.url>
-        <flyway.user>postgres</flyway.user>
-        <flyway.password>MyP@ssword!123</flyway.password>
     </properties>
     <dependencies>
         <dependency>
@@ -171,8 +169,8 @@
                 <artifactId>flyway-maven-plugin</artifactId>
                 <configuration>
                     <url>${flyway.url}</url>
-                    <user>${flyway.user}</user>
-                    <password>${flyway.password}</password>
+                    <!-- user/password intentionally omitted: supply via CLI -->
+                    <!-- mvn flyway:migrate -Dflyway.user=X -Dflyway.password=X -->
                     <cleanDisabled>false</cleanDisabled>
                 </configuration>
             </plugin>
@@ -184,6 +182,10 @@
                         <exclude>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
+                        </exclude>
+                        <exclude>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-devtools</artifactId>
                         </exclude>
                     </excludes>
                 </configuration>
