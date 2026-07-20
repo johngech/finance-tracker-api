@@ -1,6 +1,7 @@
 package com.marakicode.financetracker.auth;
 
 import com.marakicode.financetracker.common.CurrentUserProvider;
+import com.marakicode.financetracker.users.User;
 import com.marakicode.financetracker.users.UserService;
 import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.dto.UserDto;
@@ -33,14 +34,9 @@ public class AuthService {
         return generateTokenPair(user, response);
     }
 
-    public UserDto register(RegisterRequest request, HttpServletResponse response) {
+    public UserDto register(UserCreateRequest request, HttpServletResponse response) {
         log.info("event=auth.register email={}", request.email());
-        var userDto = userService.createUser(new UserCreateRequest(
-                request.firstName(), request.lastName(), request.email(), request.password()));
-        var user = userService.findById(userDto.id());
-        String refreshToken = jwtService.generateRefreshToken(user).toString();
-        addRefreshTokenCookie(refreshToken, response);
-        return userDto;
+        return userService.createUser(request);
     }
 
     public JwtResponse refresh(String refreshToken) {
@@ -64,7 +60,7 @@ public class AuthService {
         deleteRefreshTokenCookie(response);
     }
 
-    private JwtResponse generateTokenPair(com.marakicode.financetracker.users.User user, HttpServletResponse response) {
+    private JwtResponse generateTokenPair(User user, HttpServletResponse response) {
         String accessToken = jwtService.generateAccessToken(user).toString();
         String refreshToken = jwtService.generateRefreshToken(user).toString();
         addRefreshTokenCookie(refreshToken, response);

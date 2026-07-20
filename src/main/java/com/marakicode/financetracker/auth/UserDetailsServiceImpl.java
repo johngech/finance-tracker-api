@@ -1,7 +1,6 @@
 package com.marakicode.financetracker.auth;
 
-import com.marakicode.financetracker.common.ResourceNotFoundException;
-import com.marakicode.financetracker.users.UserService;
+import com.marakicode.financetracker.users.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -15,22 +14,19 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    private final UserService userService;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        try {
-            var user = userService.findByEmail(email);
-            String roleName = user.getRole() != null ? user.getRole().name() : "USER";
-            return User.builder()
-                    .username(user.getEmail())
-                    .password(user.getPasswordHash())
-                    .authorities(new SimpleGrantedAuthority("ROLE_" + roleName))
-                    .disabled(!user.isActive())
-                    .build();
-        } catch (ResourceNotFoundException e) {
-            throw new UsernameNotFoundException("User not found with email: " + email, e);
-        }
+        var user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+        String roleName = user.getRole() != null ? user.getRole().name() : "USER";
+        return User.builder()
+                .username(user.getEmail())
+                .password(user.getPasswordHash())
+                .authorities(new SimpleGrantedAuthority("ROLE_" + roleName))
+                .disabled(!user.isActive())
+                .build();
     }
 }

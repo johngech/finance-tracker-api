@@ -28,13 +28,15 @@
     </scm>
     <properties>
         <java.version>17</java.version>
-        <!-- Flyway Maven plugin — provide via CLI: -Dflyway.user=X -Dflyway.password=X -->
-        <flyway.url>jdbc:postgresql://localhost:5432/financetracker</flyway.url>
     </properties>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
@@ -168,9 +170,9 @@
                 <groupId>org.flywaydb</groupId>
                 <artifactId>flyway-maven-plugin</artifactId>
                 <configuration>
-                    <url>${flyway.url}</url>
-                    <!-- user/password intentionally omitted: supply via CLI -->
-                    <!-- mvn flyway:migrate -Dflyway.user=X -Dflyway.password=X -->
+                        <url>${env.DB_URL}</url>
+                        <user>${env.DB_USER}</user>
+                        <password>${env.DB_PASSWORD}</password>
                     <cleanDisabled>false</cleanDisabled>
                 </configuration>
             </plugin>

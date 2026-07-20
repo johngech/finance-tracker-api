@@ -20,6 +20,11 @@ spring:
       idle-timeout: 300000
       max-lifetime: 1200000
 
+  flyway:
+    url: ${DB_URL}
+    user: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
   jwt:
     secret: ${JWT_SECRET}
 

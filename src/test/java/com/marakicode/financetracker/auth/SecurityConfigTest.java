@@ -189,9 +189,7 @@ class SecurityConfigTest {
                 .andExpect(jsonPath("$.data.firstName").value("New"))
                 .andExpect(jsonPath("$.data.lastName").value("User"))
                 .andExpect(jsonPath("$.data.email").value("newuser@example.com"))
-                .andExpect(cookie().exists("refreshToken"))
-                .andExpect(cookie().httpOnly("refreshToken", true))
-                .andExpect(cookie().path("refreshToken", "/api/v1/auth"));
+                .andExpect(jsonPath("$.data.role").value("USER"));
     }
 
     // ── Admin endpoint security (integration tests) ──────────────────

@@ -161,7 +161,7 @@ class AuthServiceTest {
     void register_shouldReturnUserDto_whenValidRequest() {
 
         // Arrange
-        var registerRequest = new RegisterRequest("Alice", "Smith", "alice@example.com", "Secret123!");
+        var registerRequest = new UserCreateRequest("Alice", "Smith", "alice@example.com", "Secret123!");
         var user = testUser();
         var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER, LocalDateTime.now());
         var refreshJwt = testRefreshJwt(1L);
@@ -181,7 +181,6 @@ class AuthServiceTest {
         assertThat(result.lastName()).isEqualTo("Smith");
         assertThat(result.email()).isEqualTo("alice@example.com");
         verify(userService).createUser(any(UserCreateRequest.class));
-        verify(httpResponse).addHeader(any(), any());
     }
 
     @Test

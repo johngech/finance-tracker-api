@@ -2,6 +2,7 @@ package com.marakicode.financetracker.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marakicode.financetracker.common.DuplicateResourceException;
+import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.dto.UserDto;
 import com.marakicode.financetracker.users.Role;
 import org.junit.jupiter.api.DisplayName;
@@ -101,9 +102,9 @@ class AuthControllerTest {
     void register_shouldReturn201_whenValidRequest() throws Exception {
 
         // Arrange
-        var request = new RegisterRequest("Alice", "Smith", "alice@example.com", "Secret123!");
+        var request = new UserCreateRequest("Alice", "Smith", "alice@example.com", "Secret123!");
         var userDto = new UserDto(1L, "Alice", "Smith", "alice@example.com", Role.USER, LocalDateTime.of(2025, 1, 15, 10, 30));
-        when(authService.register(any(RegisterRequest.class), any())).thenReturn(userDto);
+        when(authService.register(any(UserCreateRequest.class), any())).thenReturn(userDto);
 
         // Act & Assert
         mockMvc.perform(post("/api/v1/auth/register")
@@ -122,8 +123,8 @@ class AuthControllerTest {
     void register_shouldReturn409_whenDuplicateEmail() throws Exception {
 
         // Arrange
-        var request = new RegisterRequest("Alice", "Smith", "alice@example.com", "Secret123!");
-        when(authService.register(any(RegisterRequest.class), any()))
+        var request = new UserCreateRequest("Alice", "Smith", "alice@example.com", "Secret123!");
+        when(authService.register(any(UserCreateRequest.class), any()))
                 .thenThrow(new DuplicateResourceException("Email already registered"));
 
         // Act & Assert

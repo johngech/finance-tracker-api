@@ -1,6 +1,7 @@
 package com.marakicode.financetracker.auth;
 
 import com.marakicode.financetracker.common.ApiResponse;
+import com.marakicode.financetracker.users.dto.UserCreateRequest;
 import com.marakicode.financetracker.users.dto.UserDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -44,7 +45,7 @@ public class AuthController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed or email already in use")
     })
     public ResponseEntity<ApiResponse<UserDto>> register(
-            @Valid @RequestBody RegisterRequest request,
+            @Valid @RequestBody UserCreateRequest request,
             HttpServletResponse response) {
         var userDto = authService.register(request, response);
         return ResponseEntity.status(HttpStatus.CREATED)

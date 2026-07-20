@@ -14,14 +14,17 @@
 spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/financetracker}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:changeme}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     show-sql: true
 
   flyway:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/financetracker}
+    user: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:}
     baseline-on-migrate: true
 
   # JWT dev fallback — safe for local use only, never use in stag/prod
